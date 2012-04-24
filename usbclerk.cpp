@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <tchar.h>
-#include "usbcommon.h"
+#include "usbclerk.h"
 #include "libwdi.h"
 #include "vdlog.h"
 

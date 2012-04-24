@@ -1,5 +1,5 @@
-#ifndef _H_USBCOMMON
-#define _H_USBCOMMON
+#ifndef _H_USBCLERK
+#define _H_USBCLERK
 
 #include <windows.h>
 

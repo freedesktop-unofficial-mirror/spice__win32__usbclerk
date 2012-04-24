@@ -343,7 +343,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\usbcommon.h"
+				RelativePath=".\usbclerk.h"
 				>
 			</File>
 			<File

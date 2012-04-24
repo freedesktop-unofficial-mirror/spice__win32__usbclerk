@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <tchar.h>
-#include "usbcommon.h"
+#include "usbclerk.h"
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
