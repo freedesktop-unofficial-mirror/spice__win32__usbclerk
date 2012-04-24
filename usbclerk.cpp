@@ -202,7 +202,7 @@ VOID WINAPI USBClerk::main(DWORD argc, TCHAR* argv[])
     TCHAR temp_path[MAX_PATH];
 
     if (GetTempPath(MAX_PATH, temp_path)) {
-        sprintf_s(s->_wdi_path, MAX_PATH, USB_DRIVER_PATH, temp_path);      
+        sprintf_s(s->_wdi_path, MAX_PATH, USB_DRIVER_PATH, temp_path);
         swprintf_s(log_path, MAX_PATH, USB_CLERK_LOG_PATH, temp_path);
         s->_log = VDLog::get(log_path);
     }
@@ -253,9 +253,10 @@ bool USBClerk::execute()
 {
     SECURITY_ATTRIBUTES sec_attr;
     SECURITY_DESCRIPTOR* sec_desr;
-    USBDevInfo dev;
+    USBClerkDevInfo dev;
+    USBClerkAck ack = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
+        USB_CLERK_ACK, sizeof(USBClerkAck)}};
     DWORD bytes;
-    DWORD ack;
 
 #if 0
     /* Hack for wdi logging */
@@ -284,22 +285,29 @@ bool USBClerk::execute()
         }
         if (!ReadFile(_pipe, &dev, sizeof(dev), &bytes, NULL)) {
             vd_printf("ReadFile() failed: %d\n", GetLastError());
-            break;
+            goto disconnect;
+        }
+        if (dev.hdr.magic != USB_CLERK_MAGIC || dev.hdr.type != USB_CLERK_DEV_INFO ||
+                dev.hdr.size != sizeof(USBClerkDevInfo)) {
+            vd_printf("Unknown message received, magic %u type %u size %u",
+                      dev.hdr.magic, dev.hdr.type, dev.hdr.size);
+            goto disconnect;
         }
         vd_printf("Installing winusb driver for %04x:%04x", dev.vid, dev.pid);
-        if (ack = install_winusb_driver(dev.vid, dev.pid)) {
+        if (ack.ack = install_winusb_driver(dev.vid, dev.pid)) {
             vd_printf("winusb driver install succeed");
         } else {
             vd_printf("winusb driver install failed");
         }
         if (!WriteFile(_pipe, &ack, sizeof(ack), &bytes, NULL)) {
             vd_printf("WriteFile() failed: %d\n", GetLastError());
-            break;
+            goto disconnect;
         }
         FlushFileBuffers(_pipe);
+disconnect:
         DisconnectNamedPipe(_pipe);
     }
-    CloseHandle(_pipe); 
+    CloseHandle(_pipe);
     return true;
 }
 
@@ -333,7 +341,7 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
         vd_printf("Device %04x:%04x was not found", vid, pid);
         goto cleanup;
     }
-   
+
     vd_printf("Device %04x:%04x found", vid, pid);
 
     /* if the driver is already installed -- nothing to do */
@@ -356,7 +364,7 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
     vd_printf("Installing driver for USB device: \"%s\" (%04x:%04x) inf: %s",
               wdidev->desc, vid, pid, infname);
     memset(&wdi_prep_opts, 0, sizeof(wdi_prep_opts));
-    wdi_prep_opts.driver_type = WDI_WINUSB;      
+    wdi_prep_opts.driver_type = WDI_WINUSB;
     r = wdi_prepare_driver(wdidev, _wdi_path, infname, &wdi_prep_opts);
     if (r != WDI_SUCCESS) {
         vd_printf("Device %04x:%04x driver prepare failed -- %s (%d)",

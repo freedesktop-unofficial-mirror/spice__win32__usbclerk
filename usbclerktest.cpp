@@ -5,9 +5,11 @@
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
     HANDLE pipe;
-    USBDevInfo dev;
+    USBClerkDevInfo dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION, 
+        USB_CLERK_DEV_INFO, sizeof(USBClerkDevInfo)}};
+    USBClerkAck ack;
     DWORD pipe_mode;
-    DWORD bytes, ack = 0;
+    DWORD bytes = 0;
 
     if (argc < 3 || !swscanf_s(argv[1], L"%hx", &dev.vid) ||
                     !swscanf_s(argv[2], L"%hx", &dev.pid)) {
@@ -32,7 +34,13 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         return 1;
     }
     CloseHandle(pipe);
-    if (ack) {
+    if (ack.hdr.magic != USB_CLERK_MAGIC || ack.hdr.type != USB_CLERK_ACK ||
+            ack.hdr.size != sizeof(USBClerkAck)) {
+        printf("Unknown message received, magic 0x%x type %u size %u",
+               ack.hdr.magic, ack.hdr.type, ack.hdr.size);
+        return 1;
+    }
+    if (ack.ack) {
         printf("winusb driver install succeed");
     } else {
         printf("winusb driver install failed");
