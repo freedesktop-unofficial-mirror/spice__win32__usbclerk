@@ -44,7 +44,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="Q:\test\libwdi-1.2.1\libwdi"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -67,7 +67,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="Version.lib libwdi.lib setupapi.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="Q:\test\libwdi-1.2.1\Win32\Debug\lib"
+				AdditionalLibraryDirectories="&quot;$(LIBWDI_DIR)\Win32\Debug\lib&quot;"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				RandomizedBaseAddress="1"
@@ -122,7 +122,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="Q:\test\libwdi-1.2.1\libwdi"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -145,7 +145,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="Version.lib libwdi.lib setupapi.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="Q:\test\libwdi-1.2.1\x64\Debug\lib"
+				AdditionalLibraryDirectories="&quot;$(LIBWDI_DIR)\x64\Debug\lib&quot;"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				RandomizedBaseAddress="1"
@@ -199,7 +199,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="Q:\test\libwdi-1.2.1\libwdi"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -220,7 +220,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="Version.lib libwdi.lib setupapi.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="Q:\test\libwdi-1.2.1\Win32\Release\lib"
+				AdditionalLibraryDirectories="&quot;$(LIBWDI_DIR)\Win32\Release\lib&quot;"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="2"
@@ -277,7 +277,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="Q:\test\libwdi-1.2.1\libwdi"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -298,7 +298,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="Version.lib libwdi.lib setupapi.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="Q:\test\libwdi-1.2.1\x64\Release\lib"
+				AdditionalLibraryDirectories="&quot;$(LIBWDI_DIR)\x64\Release\lib&quot;"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="2"
