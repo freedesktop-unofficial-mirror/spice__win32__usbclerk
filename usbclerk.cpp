@@ -17,7 +17,7 @@
 #define USB_CLERK_PIPE_BUF_SIZE     1024
 #define USB_DRIVER_PATH             "%Swdi_usb_driver"
 #define USB_DRIVER_INFNAME_LEN      64
-#define USB_DRIVER_INSTALL_RETRIES  3
+#define USB_DRIVER_INSTALL_RETRIES  7
 #define USB_DRIVER_INSTALL_INTERVAL 1000
 
 class USBClerk {
@@ -376,9 +376,9 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
     for (int t = 0; t < USB_DRIVER_INSTALL_RETRIES; t++) {
         r = wdi_install_driver(wdidev, _wdi_path, infname, &wdi_inst_opts);
         if (r == WDI_ERROR_PENDING_INSTALLATION) {
-            vd_printf("Another driver is installing, retry in %d seconds",
-                      t * USB_DRIVER_INSTALL_INTERVAL);
-            Sleep(t * USB_DRIVER_INSTALL_INTERVAL);
+            vd_printf("Another driver is installing, retry in %d ms",
+                      USB_DRIVER_INSTALL_INTERVAL);
+            Sleep(USB_DRIVER_INSTALL_INTERVAL);
         } else {
             /* break on success or any error other than pending installation */
             break;
