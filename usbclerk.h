@@ -25,7 +25,7 @@ typedef struct USBClerkDriverOp {
     USBClerkHeader hdr;
     UINT16 vid;
     UINT16 pid;
-} USBClerkDriverInstall, USBClerkDriverRemove;
+} USBClerkDriverOp;
 
 typedef struct USBClerkReply {
     USBClerkHeader hdr;

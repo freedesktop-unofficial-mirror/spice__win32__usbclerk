@@ -31,6 +31,7 @@ public:
 private:
     USBClerk();
     bool execute();
+    bool dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply);
     bool install_winusb_driver(int vid, int pid);
     static DWORD WINAPI control_handler(DWORD control, DWORD event_type,
                                         LPVOID event_data, LPVOID context);
@@ -253,9 +254,9 @@ bool USBClerk::execute()
 {
     SECURITY_ATTRIBUTES sec_attr;
     SECURITY_DESCRIPTOR* sec_desr;
-    USBClerkDriverInstall dev;
     USBClerkReply reply = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
         USB_CLERK_REPLY, sizeof(USBClerkReply)}};
+    CHAR buffer[USB_CLERK_PIPE_BUF_SIZE];
     DWORD bytes;
 
 #if 0
@@ -283,21 +284,12 @@ bool USBClerk::execute()
             printf("ConnectNamedPipe() failed: %u", GetLastError());
             break;
         }
-        if (!ReadFile(_pipe, &dev, sizeof(dev), &bytes, NULL)) {
+        if (!ReadFile(_pipe, &buffer, sizeof(buffer), &bytes, NULL)) {
             vd_printf("ReadFile() failed: %d\n", GetLastError());
             goto disconnect;
         }
-        if (dev.hdr.magic != USB_CLERK_MAGIC || dev.hdr.type != USB_CLERK_DRIVER_INSTALL ||
-                dev.hdr.size != sizeof(USBClerkDriverInstall)) {
-            vd_printf("Unknown message received, magic %u type %u size %u",
-                      dev.hdr.magic, dev.hdr.type, dev.hdr.size);
+        if (!dispatch_message(buffer, bytes, &reply)) {
             goto disconnect;
-        }
-        vd_printf("Installing winusb driver for %04x:%04x", dev.vid, dev.pid);
-        if (reply.status = install_winusb_driver(dev.vid, dev.pid)) {
-            vd_printf("winusb driver install succeed");
-        } else {
-            vd_printf("winusb driver install failed");
         }
         if (!WriteFile(_pipe, &reply, sizeof(reply), &bytes, NULL)) {
             vd_printf("WriteFile() failed: %d\n", GetLastError());
@@ -308,6 +300,36 @@ disconnect:
         DisconnectNamedPipe(_pipe);
     }
     CloseHandle(_pipe);
+    return true;
+}
+
+bool USBClerk::dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply)
+{
+    USBClerkHeader *hdr = (USBClerkHeader *)buffer;
+    USBClerkDriverOp *dev;
+
+    if (hdr->magic != USB_CLERK_MAGIC) {
+        vd_printf("Bad message received, magic %u", hdr->magic);
+        return false;
+    }
+    if (hdr->size != sizeof(USBClerkDriverOp)) {
+        vd_printf("Wrong mesage size %u type %u", hdr->size, hdr->type);
+        return false;
+    }
+    dev = (USBClerkDriverOp *)buffer;
+    switch (hdr->type) {
+    case USB_CLERK_DRIVER_INSTALL:
+        vd_printf("Installing winusb driver for %04x:%04x", dev->vid, dev->pid);
+        if (reply->status = install_winusb_driver(dev->vid, dev->pid)) {
+            vd_printf("winusb driver install succeed");
+        } else {
+            vd_printf("winusb driver install failed");
+        }
+        break;
+    default:
+        vd_printf("Unknown message received, type %u", hdr->type);
+        return false;
+    }
     return true;
 }
 
