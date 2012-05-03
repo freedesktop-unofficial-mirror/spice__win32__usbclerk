@@ -1,4 +1,6 @@
 #include <windows.h>
+#include <setupapi.h>
+#include <cfgmgr32.h>
 #include <stdio.h>
 #include <string.h>
 #include <tchar.h>
@@ -33,6 +35,9 @@ private:
     bool execute();
     bool dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply);
     bool install_winusb_driver(int vid, int pid);
+    bool remove_winusb_driver(int vid, int pid);
+    bool remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info);
+    bool rescan();
     static DWORD WINAPI control_handler(DWORD control, DWORD event_type,
                                         LPVOID event_data, LPVOID context);
     static VOID WINAPI main(DWORD argc, TCHAR * argv[]);
@@ -320,15 +325,20 @@ bool USBClerk::dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply)
     switch (hdr->type) {
     case USB_CLERK_DRIVER_INSTALL:
         vd_printf("Installing winusb driver for %04x:%04x", dev->vid, dev->pid);
-        if (reply->status = install_winusb_driver(dev->vid, dev->pid)) {
-            vd_printf("winusb driver install succeed");
-        } else {
-            vd_printf("winusb driver install failed");
-        }
+        reply->status = install_winusb_driver(dev->vid, dev->pid);
+        break;
+    case USB_CLERK_DRIVER_REMOVE:
+        vd_printf("Removing winusb driver for %04x:%04x", dev->vid, dev->pid);
+        reply->status = remove_winusb_driver(dev->vid, dev->pid);        
         break;
     default:
         vd_printf("Unknown message received, type %u", hdr->type);
         return false;
+    }
+    if (reply->status) {
+        vd_printf("Completed successfully");
+    } else {
+        vd_printf("Failed");
     }
     return true;
 }
@@ -415,6 +425,67 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
 cleanup:
     wdi_destroy_list(wdilist);
     return installed;
+}
+
+bool USBClerk::remove_winusb_driver(int vid, int pid)
+{
+    HDEVINFO devs;
+    DWORD dev_index;
+    SP_DEVINFO_DATA dev_info;
+    SP_DEVINFO_LIST_DETAIL_DATA dev_info_list_detail;
+    TCHAR dev_prefix[MAX_DEVICE_ID_LEN];
+    bool ret = false;
+
+    devs = SetupDiGetClassDevsEx(NULL, NULL, NULL, DIGCF_ALLCLASSES, NULL, NULL, NULL);
+    if (devs == INVALID_HANDLE_VALUE) {
+        vd_printf("SetupDiGetClassDevsEx failed: %u\n", GetLastError());
+        return false;
+    }
+
+    dev_info_list_detail.cbSize = sizeof(dev_info_list_detail);
+    if (!SetupDiGetDeviceInfoListDetail(devs, &dev_info_list_detail)) {
+        vd_printf("SetupDiGetDeviceInfoListDetail failed: %u\n", GetLastError());
+        SetupDiDestroyDeviceInfoList(devs);
+        return false;
+    }
+
+    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04x&PID_%04x\\", vid, pid);
+    dev_info.cbSize = sizeof(dev_info);
+    for (dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, &dev_info); dev_index++) {
+        TCHAR devID[MAX_DEVICE_ID_LEN];
+
+        if (CM_Get_Device_ID_Ex(dev_info.DevInst, devID, MAX_DEVICE_ID_LEN, 0,
+                                dev_info_list_detail.RemoteMachineHandle) == CR_SUCCESS &&
+                                wcsstr(devID, dev_prefix)) {
+            vd_printf("Removing %S\n", devID);
+            ret = remove_dev(devs, &dev_info);
+            break;
+        }
+    }
+    SetupDiDestroyDeviceInfoList(devs);
+    ret = ret && rescan();
+    return ret;
+}
+
+bool USBClerk::remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info)
+{
+    SP_REMOVEDEVICE_PARAMS rmd_params;
+
+    rmd_params.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
+    rmd_params.ClassInstallHeader.InstallFunction = DIF_REMOVE;
+    rmd_params.Scope = DI_REMOVEDEVICE_GLOBAL;
+    rmd_params.HwProfile = 0;
+    return (SetupDiSetClassInstallParams(devs, dev_info,
+                &rmd_params.ClassInstallHeader, sizeof(rmd_params)) &&
+            SetupDiCallClassInstaller(DIF_REMOVE, devs, dev_info));
+}
+
+bool USBClerk::rescan()
+{
+    DEVINST dev_root;
+
+    return (CM_Locate_DevNode_Ex(&dev_root, NULL, CM_LOCATE_DEVNODE_NORMAL, NULL) == CR_SUCCESS &&
+            CM_Reenumerate_DevNode_Ex(dev_root, 0, NULL) == CR_SUCCESS);
 }
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])

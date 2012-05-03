@@ -5,15 +5,15 @@
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
     HANDLE pipe;
-    USBClerkDriverInstall dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION, 
-        USB_CLERK_DRIVER_INSTALL, sizeof(USBClerkDriverInstall)}};
+    USBClerkDriverOp dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION, 0, sizeof(USBClerkDriverOp)}};
     USBClerkReply reply;
     DWORD pipe_mode;
     DWORD bytes = 0;
+    bool do_remove = false;
 
-    if (argc < 3 || !swscanf_s(argv[1], L"%hx", &dev.vid) ||
-                    !swscanf_s(argv[2], L"%hx", &dev.pid)) {
-        printf("Use: usbclerktest VID PID\n");
+    if (argc < 2 || swscanf_s(argv[argc - 1], L"%hx:%hx", &dev.vid, &dev.pid) < 2 ||
+                               (argc == 3 && !(do_remove = !wcscmp(argv[1], L"/u")))) {
+        printf("Usage: usbclerktest [/u] vid:pid\n/u - uninstall driver\nvid:pid in hex\n");
         return 1;
     }
     pipe = CreateFile(USB_CLERK_PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
@@ -27,7 +27,13 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         printf("SetNamedPipeHandleState() failed: %d\n", GetLastError());
         return 1;
     }
-    printf("Signing & installing %04x:%04x\n", dev.vid, dev.pid);
+    if (do_remove) {
+        printf("Removing %04x:%04x\n", dev.vid, dev.pid);
+        dev.hdr.type = USB_CLERK_DRIVER_REMOVE;
+    } else {
+        printf("Signing & installing %04x:%04x\n", dev.vid, dev.pid);
+        dev.hdr.type = USB_CLERK_DRIVER_INSTALL;
+    }
     if (!TransactNamedPipe(pipe, &dev, sizeof(dev), &reply, sizeof(reply), &bytes, NULL)) {
         printf("TransactNamedPipe() failed: %d\n", GetLastError());
         CloseHandle(pipe);
@@ -36,14 +42,14 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
     CloseHandle(pipe);
     if (reply.hdr.magic != USB_CLERK_MAGIC || reply.hdr.type != USB_CLERK_REPLY ||
             reply.hdr.size != sizeof(USBClerkReply)) {
-        printf("Unknown message received, magic 0x%x type %u size %u",
+        printf("Unknown message received, magic 0x%x type %u size %u\n",
                reply.hdr.magic, reply.hdr.type, reply.hdr.size);
         return 1;
     }
     if (reply.status) {
-        printf("winusb driver install succeed");
+        printf("Completed successfully\n");
     } else {
-        printf("winusb driver install failed");
+        printf("Failed\n");
     }
     return 0;
 }
