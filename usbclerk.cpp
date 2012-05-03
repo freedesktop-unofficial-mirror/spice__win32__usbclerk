@@ -253,9 +253,9 @@ bool USBClerk::execute()
 {
     SECURITY_ATTRIBUTES sec_attr;
     SECURITY_DESCRIPTOR* sec_desr;
-    USBClerkDevInfo dev;
-    USBClerkAck ack = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
-        USB_CLERK_ACK, sizeof(USBClerkAck)}};
+    USBClerkDriverInstall dev;
+    USBClerkReply reply = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
+        USB_CLERK_REPLY, sizeof(USBClerkReply)}};
     DWORD bytes;
 
 #if 0
@@ -287,19 +287,19 @@ bool USBClerk::execute()
             vd_printf("ReadFile() failed: %d\n", GetLastError());
             goto disconnect;
         }
-        if (dev.hdr.magic != USB_CLERK_MAGIC || dev.hdr.type != USB_CLERK_DEV_INFO ||
-                dev.hdr.size != sizeof(USBClerkDevInfo)) {
+        if (dev.hdr.magic != USB_CLERK_MAGIC || dev.hdr.type != USB_CLERK_DRIVER_INSTALL ||
+                dev.hdr.size != sizeof(USBClerkDriverInstall)) {
             vd_printf("Unknown message received, magic %u type %u size %u",
                       dev.hdr.magic, dev.hdr.type, dev.hdr.size);
             goto disconnect;
         }
         vd_printf("Installing winusb driver for %04x:%04x", dev.vid, dev.pid);
-        if (ack.ack = install_winusb_driver(dev.vid, dev.pid)) {
+        if (reply.status = install_winusb_driver(dev.vid, dev.pid)) {
             vd_printf("winusb driver install succeed");
         } else {
             vd_printf("winusb driver install failed");
         }
-        if (!WriteFile(_pipe, &ack, sizeof(ack), &bytes, NULL)) {
+        if (!WriteFile(_pipe, &reply, sizeof(reply), &bytes, NULL)) {
             vd_printf("WriteFile() failed: %d\n", GetLastError());
             goto disconnect;
         }

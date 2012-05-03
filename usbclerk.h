@@ -5,7 +5,7 @@
 
 #define USB_CLERK_PIPE_NAME     TEXT("\\\\.\\pipe\\usbclerkpipe")
 #define USB_CLERK_MAGIC         0xDADA
-#define USB_CLERK_VERSION       0x0001
+#define USB_CLERK_VERSION       0x0002
 
 typedef struct USBClerkHeader {
     UINT16 magic;
@@ -15,20 +15,21 @@ typedef struct USBClerkHeader {
 } USBClerkHeader;
 
 enum {
-    USB_CLERK_DEV_INFO = 1,
-    USB_CLERK_ACK,
+    USB_CLERK_DRIVER_INSTALL = 1,
+    USB_CLERK_DRIVER_REMOVE,
+    USB_CLERK_REPLY,
     USB_CLERK_END_MESSAGE,
 };
 
-typedef struct USBClerkDevInfo {
+typedef struct USBClerkDriverOp {
     USBClerkHeader hdr;
     UINT16 vid;
     UINT16 pid;
-} USBClerkDevInfo;
+} USBClerkDriverInstall, USBClerkDriverRemove;
 
-typedef struct USBClerkAck {
+typedef struct USBClerkReply {
     USBClerkHeader hdr;
-    UINT16 ack;
-} USBClerkAck;
+    UINT32 status;
+} USBClerkReply;
 
 #endif

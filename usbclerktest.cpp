@@ -5,9 +5,9 @@
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
     HANDLE pipe;
-    USBClerkDevInfo dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION, 
-        USB_CLERK_DEV_INFO, sizeof(USBClerkDevInfo)}};
-    USBClerkAck ack;
+    USBClerkDriverInstall dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION, 
+        USB_CLERK_DRIVER_INSTALL, sizeof(USBClerkDriverInstall)}};
+    USBClerkReply reply;
     DWORD pipe_mode;
     DWORD bytes = 0;
 
@@ -28,19 +28,19 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         return 1;
     }
     printf("Signing & installing %04x:%04x\n", dev.vid, dev.pid);
-    if (!TransactNamedPipe(pipe, &dev, sizeof(dev), &ack, sizeof(ack), &bytes, NULL)) {
+    if (!TransactNamedPipe(pipe, &dev, sizeof(dev), &reply, sizeof(reply), &bytes, NULL)) {
         printf("TransactNamedPipe() failed: %d\n", GetLastError());
         CloseHandle(pipe);
         return 1;
     }
     CloseHandle(pipe);
-    if (ack.hdr.magic != USB_CLERK_MAGIC || ack.hdr.type != USB_CLERK_ACK ||
-            ack.hdr.size != sizeof(USBClerkAck)) {
+    if (reply.hdr.magic != USB_CLERK_MAGIC || reply.hdr.type != USB_CLERK_REPLY ||
+            reply.hdr.size != sizeof(USBClerkReply)) {
         printf("Unknown message received, magic 0x%x type %u size %u",
-               ack.hdr.magic, ack.hdr.type, ack.hdr.size);
+               reply.hdr.magic, reply.hdr.type, reply.hdr.size);
         return 1;
     }
-    if (ack.ack) {
+    if (reply.status) {
         printf("winusb driver install succeed");
     } else {
         printf("winusb driver install failed");
