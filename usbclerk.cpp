@@ -19,8 +19,9 @@
 #define USB_CLERK_PIPE_BUF_SIZE     1024
 #define USB_DRIVER_PATH             "%Swdi_usb_driver"
 #define USB_DRIVER_INFNAME_LEN      64
-#define USB_DRIVER_INSTALL_RETRIES  7
-#define USB_DRIVER_INSTALL_INTERVAL 1000
+#define USB_DRIVER_INSTALL_RETRIES  10
+#define USB_DRIVER_INSTALL_INTERVAL 2000
+#define MAX_DEVICE_PROP_LEN         256
 
 class USBClerk {
 public:
@@ -286,18 +287,18 @@ bool USBClerk::execute()
     }
     while (_running) {
         if (!ConnectNamedPipe(_pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
-            printf("ConnectNamedPipe() failed: %u", GetLastError());
+            vd_printf("ConnectNamedPipe() failed: %u", GetLastError());
             break;
         }
         if (!ReadFile(_pipe, &buffer, sizeof(buffer), &bytes, NULL)) {
-            vd_printf("ReadFile() failed: %d\n", GetLastError());
+            vd_printf("ReadFile() failed: %d", GetLastError());
             goto disconnect;
         }
         if (!dispatch_message(buffer, bytes, &reply)) {
             goto disconnect;
         }
         if (!WriteFile(_pipe, &reply, sizeof(reply), &bytes, NULL)) {
-            vd_printf("WriteFile() failed: %d\n", GetLastError());
+            vd_printf("WriteFile() failed: %d", GetLastError());
             goto disconnect;
         }
         FlushFileBuffers(_pipe);
@@ -408,8 +409,10 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
     for (int t = 0; t < USB_DRIVER_INSTALL_RETRIES; t++) {
         r = wdi_install_driver(wdidev, _wdi_path, infname, &wdi_inst_opts);
         if (r == WDI_ERROR_PENDING_INSTALLATION) {
-            vd_printf("Another driver is installing, retry in %d ms",
-                      USB_DRIVER_INSTALL_INTERVAL);
+            if (t == 0) {
+                vd_printf("Another driver is installing, will retry every %dms, up to %d times",
+                          USB_DRIVER_INSTALL_INTERVAL, USB_DRIVER_INSTALL_RETRIES);
+            }
             Sleep(USB_DRIVER_INSTALL_INTERVAL);
         } else {
             /* break on success or any error other than pending installation */
@@ -432,32 +435,22 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
     HDEVINFO devs;
     DWORD dev_index;
     SP_DEVINFO_DATA dev_info;
-    SP_DEVINFO_LIST_DETAIL_DATA dev_info_list_detail;
     TCHAR dev_prefix[MAX_DEVICE_ID_LEN];
+    TCHAR dev_id[MAX_DEVICE_ID_LEN];
     bool ret = false;
 
-    devs = SetupDiGetClassDevsEx(NULL, NULL, NULL, DIGCF_ALLCLASSES, NULL, NULL, NULL);
+    devs = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_ALLCLASSES);
     if (devs == INVALID_HANDLE_VALUE) {
-        vd_printf("SetupDiGetClassDevsEx failed: %u\n", GetLastError());
+        vd_printf("SetupDiGetClassDevsEx failed: %u", GetLastError());
         return false;
     }
 
-    dev_info_list_detail.cbSize = sizeof(dev_info_list_detail);
-    if (!SetupDiGetDeviceInfoListDetail(devs, &dev_info_list_detail)) {
-        vd_printf("SetupDiGetDeviceInfoListDetail failed: %u\n", GetLastError());
-        SetupDiDestroyDeviceInfoList(devs);
-        return false;
-    }
-
-    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04x&PID_%04x\\", vid, pid);
+    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04x&PID_%04x", vid, pid);
     dev_info.cbSize = sizeof(dev_info);
     for (dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, &dev_info); dev_index++) {
-        TCHAR devID[MAX_DEVICE_ID_LEN];
-
-        if (CM_Get_Device_ID_Ex(dev_info.DevInst, devID, MAX_DEVICE_ID_LEN, 0,
-                                dev_info_list_detail.RemoteMachineHandle) == CR_SUCCESS &&
-                                wcsstr(devID, dev_prefix)) {
-            vd_printf("Removing %S\n", devID);
+        if (SetupDiGetDeviceInstanceId(devs, &dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
+                wcsstr(dev_id, dev_prefix)) {
+            vd_printf("Removing %S", dev_id);
             ret = remove_dev(devs, &dev_info);
             break;
         }
