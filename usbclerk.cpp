@@ -470,17 +470,31 @@ bool USBClerk::remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info)
     rmd_params.ClassInstallHeader.InstallFunction = DIF_REMOVE;
     rmd_params.Scope = DI_REMOVEDEVICE_GLOBAL;
     rmd_params.HwProfile = 0;
-    return (SetupDiSetClassInstallParams(devs, dev_info,
-                &rmd_params.ClassInstallHeader, sizeof(rmd_params)) &&
-            SetupDiCallClassInstaller(DIF_REMOVE, devs, dev_info));
+    if (!SetupDiSetClassInstallParams(devs, dev_info,
+            &rmd_params.ClassInstallHeader, sizeof(rmd_params))) {
+        vd_printf("Failed setting class remove params: %u", GetLastError());
+        return false;
+    }
+    if (!SetupDiCallClassInstaller(DIF_REMOVE, devs, dev_info)) {
+        vd_printf("Class remove failed: %u", GetLastError());
+        return false;
+    }
+    return true;
 }
 
 bool USBClerk::rescan()
 {
     DEVINST dev_root;
 
-    return (CM_Locate_DevNode_Ex(&dev_root, NULL, CM_LOCATE_DEVNODE_NORMAL, NULL) == CR_SUCCESS &&
-            CM_Reenumerate_DevNode_Ex(dev_root, 0, NULL) == CR_SUCCESS);
+    if (CM_Locate_DevNode_Ex(&dev_root, NULL, CM_LOCATE_DEVNODE_NORMAL, NULL) != CR_SUCCESS) {
+        vd_printf("Device node cannot be located: %u", GetLastError());
+        return false;
+    }
+    if (CM_Reenumerate_DevNode_Ex(dev_root, 0, NULL) != CR_SUCCESS) {
+        vd_printf("Device node enumeration failed: %u", GetLastError());
+        return false;
+    }
+    return true;
 }
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
