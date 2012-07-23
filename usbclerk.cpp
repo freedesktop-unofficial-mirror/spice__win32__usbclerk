@@ -17,7 +17,7 @@
 #define USB_CLERK_LOG_PATH          TEXT("%susbclerk.log")
 #define USB_CLERK_PIPE_TIMEOUT      10000
 #define USB_CLERK_PIPE_BUF_SIZE     1024
-#define USB_DRIVER_PATH             "%Swdi_usb_driver"
+#define USB_DRIVER_PATH             "%S\\wdi_usb_driver"
 #define USB_DRIVER_INFNAME_LEN      64
 #define USB_DRIVER_INSTALL_RETRIES  10
 #define USB_DRIVER_INSTALL_INTERVAL 2000
@@ -206,12 +206,14 @@ VOID WINAPI USBClerk::main(DWORD argc, TCHAR* argv[])
 
     SERVICE_STATUS* status;
     TCHAR log_path[MAX_PATH];
-    TCHAR temp_path[MAX_PATH];
+    TCHAR path[MAX_PATH];
 
-    if (GetTempPath(MAX_PATH, temp_path)) {
-        sprintf_s(s->_wdi_path, MAX_PATH, USB_DRIVER_PATH, temp_path);
-        swprintf_s(log_path, MAX_PATH, USB_CLERK_LOG_PATH, temp_path);
+    if (GetTempPath(MAX_PATH, path)) {
+        swprintf_s(log_path, MAX_PATH, USB_CLERK_LOG_PATH, path);
         s->_log = VDLog::get(log_path);
+    }
+    if (GetSystemDirectory(path, MAX_PATH)) {
+        sprintf_s(s->_wdi_path, MAX_PATH, USB_DRIVER_PATH, path);
     }
     vd_printf("***Service started***");
     SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
