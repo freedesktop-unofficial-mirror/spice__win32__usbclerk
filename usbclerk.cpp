@@ -39,6 +39,7 @@ private:
     bool remove_winusb_driver(int vid, int pid);
     bool remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info);
     bool rescan();
+    bool get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info);
     static DWORD WINAPI control_handler(DWORD control, DWORD event_type,
                                         LPVOID event_data, LPVOID context);
     static VOID WINAPI main(DWORD argc, TCHAR * argv[]);
@@ -435,10 +436,7 @@ cleanup:
 bool USBClerk::remove_winusb_driver(int vid, int pid)
 {
     HDEVINFO devs;
-    DWORD dev_index;
     SP_DEVINFO_DATA dev_info;
-    TCHAR dev_prefix[MAX_DEVICE_ID_LEN];
-    TCHAR dev_id[MAX_DEVICE_ID_LEN];
     bool ret = false;
 
     devs = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_ALLCLASSES);
@@ -446,16 +444,9 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
         vd_printf("SetupDiGetClassDevsEx failed: %u", GetLastError());
         return false;
     }
-
-    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04x&PID_%04x", vid, pid);
-    dev_info.cbSize = sizeof(dev_info);
-    for (dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, &dev_info); dev_index++) {
-        if (SetupDiGetDeviceInstanceId(devs, &dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
-                wcsstr(dev_id, dev_prefix)) {
-            vd_printf("Removing %S", dev_id);
-            ret = remove_dev(devs, &dev_info);
-            break;
-        }
+    if (get_dev_info(devs, vid, pid, &dev_info)) {
+        vd_printf("Removing %04x:%04x", vid, pid);
+        ret = remove_dev(devs, &dev_info);
     }
     SetupDiDestroyDeviceInfoList(devs);
     ret = ret && rescan();
@@ -495,6 +486,22 @@ bool USBClerk::rescan()
         return false;
     }
     return true;
+}
+
+bool USBClerk::get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info)
+{
+    TCHAR dev_prefix[MAX_DEVICE_ID_LEN];
+    TCHAR dev_id[MAX_DEVICE_ID_LEN];
+
+    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04x&PID_%04x", vid, pid);
+    dev_info->cbSize = sizeof(*dev_info);
+    for (DWORD dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, dev_info); dev_index++) {
+        if (SetupDiGetDeviceInstanceId(devs, dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
+                wcsstr(dev_id, dev_prefix)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
