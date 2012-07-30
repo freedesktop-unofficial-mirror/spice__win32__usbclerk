@@ -347,6 +347,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\usbredirfilter.h"
+				>
+			</File>
+			<File
 				RelativePath=".\vdlog.h"
 				>
 			</File>
@@ -369,6 +373,42 @@
 			<File
 				RelativePath=".\usbclerk.cpp"
 				>
+			</File>
+			<File
+				RelativePath=".\usbredirfilter.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						CompileAs="2"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						CompileAs="2"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						CompileAs="2"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						CompileAs="2"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\vdlog.cpp"
