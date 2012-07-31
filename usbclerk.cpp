@@ -5,6 +5,7 @@
 #include <string.h>
 #include <tchar.h>
 #include "usbclerk.h"
+#include "usbredirfilter.h"
 #include "libwdi.h"
 #include "vdlog.h"
 
@@ -22,6 +23,8 @@
 #define USB_DRIVER_INSTALL_RETRIES  10
 #define USB_DRIVER_INSTALL_INTERVAL 2000
 #define MAX_DEVICE_PROP_LEN         256
+#define MAX_DEVICE_HCID_LEN         1024
+#define MAX_DEVICE_FILTER_LEN       1024
 
 class USBClerk {
 public:
@@ -39,7 +42,12 @@ private:
     bool remove_winusb_driver(int vid, int pid);
     bool remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info);
     bool rescan();
-    bool get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info);
+    bool get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info, bool *has_winusb);
+    bool get_dev_props(HDEVINFO devs, SP_DEVINFO_DATA *dev_info,
+                       uint8_t *cls, uint8_t *subcls, uint8_t *proto);
+    bool get_dev_ifaces(HDEVINFO devs, int vid, int pid, int *iface_count,
+                        uint8_t **cls, uint8_t **subcls, uint8_t **proto);
+    bool dev_filter_check(int vid, int pid, bool *has_winusb);
     static DWORD WINAPI control_handler(DWORD control, DWORD event_type,
                                         LPVOID event_data, LPVOID context);
     static VOID WINAPI main(DWORD argc, TCHAR * argv[]);
@@ -48,6 +56,8 @@ private:
     static USBClerk* _singleton;
     SERVICE_STATUS _status;
     SERVICE_STATUS_HANDLE _status_handle;
+    struct usbredirfilter_rule *_filter_rules;
+    int _filter_count;
     char _wdi_path[MAX_PATH];
     HANDLE _pipe;
     bool _running;
@@ -67,6 +77,8 @@ USBClerk* USBClerk::get()
 USBClerk::USBClerk()
     : _running (false)
     , _status_handle (0)
+    , _filter_rules (NULL)
+    , _filter_count (0)
     , _log (NULL)
 {
     _singleton = this;
@@ -265,8 +277,11 @@ bool USBClerk::execute()
     SECURITY_DESCRIPTOR* sec_desr;
     USBClerkReply reply = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
         USB_CLERK_REPLY, sizeof(USBClerkReply)}};
+    CHAR filter_str[MAX_DEVICE_FILTER_LEN];
     CHAR buffer[USB_CLERK_PIPE_BUF_SIZE];
     DWORD bytes;
+    HKEY hkey;
+    LONG ret;
 
 #if 0
     /* Hack for wdi logging */
@@ -288,6 +303,24 @@ bool USBClerk::execute()
         vd_printf("CreatePipe() failed: %u", GetLastError());
         return false;
     }
+
+    /* Read filter rules from registry */
+    ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"Software\\USBClerk", 0, KEY_READ, &hkey);
+    if (ret == ERROR_SUCCESS) {
+        DWORD size = sizeof(filter_str);
+        ret = RegQueryValueExA(hkey, "filter_rules", NULL, NULL, (LPBYTE)filter_str, &size);
+        if (ret == ERROR_SUCCESS) {
+            vd_printf("Filter rules: %s", filter_str);
+            ret = usbredirfilter_string_to_rules(filter_str, ",", "|",
+                                                 &_filter_rules, &_filter_count);
+            if (ret == 0) {
+                vd_printf("Filter count: %d", _filter_count);
+            } else {
+                vd_printf("Failed parsing filter rules: %d", ret);
+            }
+        }
+        RegCloseKey(hkey);
+    }
     while (_running) {
         if (!ConnectNamedPipe(_pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
             vd_printf("ConnectNamedPipe() failed: %u", GetLastError());
@@ -308,6 +341,7 @@ bool USBClerk::execute()
 disconnect:
         DisconnectNamedPipe(_pipe);
     }
+    free(_filter_rules);
     CloseHandle(_pipe);
     return true;
 }
@@ -354,9 +388,17 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
     struct wdi_options_prepare_driver wdi_prep_opts;
     struct wdi_options_install_driver wdi_inst_opts;
     char infname[USB_DRIVER_INFNAME_LEN];
-    bool installed = false;
+    bool installed;
     bool found = false;
     int r;
+
+    if (!dev_filter_check(vid, pid, &installed)) {
+        return false;
+    }
+    if (installed) {
+        vd_printf("WinUSB driver is already installed");
+        return true;
+    }
 
     /* find wdi device that matches the libusb device */
     memset(&wdi_list_opts, 0, sizeof(wdi_list_opts));
@@ -377,18 +419,7 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
         vd_printf("Device %04x:%04x was not found", vid, pid);
         goto cleanup;
     }
-
     vd_printf("Device %04x:%04x found", vid, pid);
-
-    /* if the driver is already installed -- nothing to do */
-    if (wdidev->driver) {
-        vd_printf("Currently installed driver is %s", wdidev->driver);
-        if (strcmp(wdidev->driver, "WinUSB") == 0) {
-            vd_printf("WinUSB driver is already installed");
-            installed = true;
-            goto cleanup;
-        }
-    }
 
     /* inf filename is built out of vid and pid */
     r = sprintf_s(infname, sizeof(infname), "usb_device_%04x_%04x.inf", vid, pid);
@@ -437,6 +468,7 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
 {
     HDEVINFO devs;
     SP_DEVINFO_DATA dev_info;
+    bool installed;
     bool ret = false;
 
     devs = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_ALLCLASSES);
@@ -444,9 +476,13 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
         vd_printf("SetupDiGetClassDevsEx failed: %u", GetLastError());
         return false;
     }
-    if (get_dev_info(devs, vid, pid, &dev_info)) {
-        vd_printf("Removing %04x:%04x", vid, pid);
-        ret = remove_dev(devs, &dev_info);
+    if (get_dev_info(devs, vid, pid, &dev_info, &installed)) {
+        if (installed) {
+            vd_printf("Removing %04x:%04x", vid, pid);
+            ret = remove_dev(devs, &dev_info);
+        } else {
+            vd_printf("WinUSB driver is not installed");
+        }
     }
     SetupDiDestroyDeviceInfoList(devs);
     ret = ret && rescan();
@@ -488,20 +524,142 @@ bool USBClerk::rescan()
     return true;
 }
 
-bool USBClerk::get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info)
+bool USBClerk::get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info,
+                            bool *has_winusb)
 {
     TCHAR dev_prefix[MAX_DEVICE_ID_LEN];
     TCHAR dev_id[MAX_DEVICE_ID_LEN];
+    TCHAR service_name[MAX_DEVICE_PROP_LEN];
+    bool dev_found = false;
 
-    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04x&PID_%04x", vid, pid);
+    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04X&PID_%04X\\", vid, pid);
     dev_info->cbSize = sizeof(*dev_info);
     for (DWORD dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, dev_info); dev_index++) {
         if (SetupDiGetDeviceInstanceId(devs, dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
-                wcsstr(dev_id, dev_prefix)) {
-            return true;
+                (dev_found = !!wcsstr(dev_id, dev_prefix))) {
+            break;
         }
     }
-    return false;
+    if (!dev_found) {
+        vd_printf("Cannot find device info %04X:%04X", vid, pid);
+        return false;
+    }
+    if (has_winusb == NULL) {
+        return true;
+    }
+    if (!SetupDiGetDeviceRegistryProperty(devs, dev_info, SPDRP_SERVICE, NULL,
+            (PBYTE)service_name, sizeof(service_name), NULL)) {
+        vd_printf("Cannot get device service name %u", GetLastError());
+        *has_winusb = false;
+        return true;
+    }
+    *has_winusb = !wcscmp(service_name, L"WinUSB");
+    return true;
+}
+
+bool USBClerk::get_dev_props(HDEVINFO devs, SP_DEVINFO_DATA *dev_info,
+                             uint8_t *cls, uint8_t *subcls, uint8_t *proto)
+{
+    TCHAR compat_ids[MAX_DEVICE_HCID_LEN];
+
+    *cls = *subcls = *proto = 0;
+    if (!SetupDiGetDeviceRegistryProperty(devs, dev_info, SPDRP_COMPATIBLEIDS, NULL,
+            (PBYTE)compat_ids, sizeof(compat_ids), NULL)) {
+        vd_printf("Cannot get compatible id %u", GetLastError());
+        return false;
+    }
+    if (swscanf_s(compat_ids, L"USB\\Class_%02hx&SubClass_%02hx&Prot_%02hx",
+            cls, subcls, proto) != 3) {
+        vd_printf("Cannot parse compatible id %S", compat_ids);
+        return false;
+    }
+    return true;
+}
+
+/* cls, subcls & proto for the interfaces are allocated here, so caller is responsible to
+   delete [] them after use */
+bool USBClerk::get_dev_ifaces(HDEVINFO devs, int vid, int pid, int *iface_count,
+                              uint8_t **cls, uint8_t **subcls, uint8_t **proto)
+{
+    TCHAR dev_prefix[MAX_DEVICE_ID_LEN];
+    TCHAR dev_id[MAX_DEVICE_ID_LEN];
+    SP_DEVINFO_DATA dev_info;
+    DWORD dev_index;
+    bool ret = true;
+    int i = 0;
+
+    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04X&PID_%04X\\&MI_", vid, pid);
+    dev_info.cbSize = sizeof(dev_info);
+    *iface_count = 0;
+    /* count interfaces */
+    for (dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, &dev_info); dev_index++) {
+        if (SetupDiGetDeviceInstanceId(devs, &dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
+                wcsstr(dev_id, dev_prefix)) {
+            *iface_count++;
+        }
+    }
+    if (!*iface_count) {
+        *cls = *subcls = *proto = NULL;
+        return true;
+    }
+    vd_printf("iface_count %d", iface_count);
+    *cls = new uint8_t[*iface_count];
+    *subcls = new uint8_t[*iface_count];
+    *proto = new uint8_t[*iface_count];
+    /* get properties for each of the interfaces */
+    for (dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, &dev_info); dev_index++) {
+        if (SetupDiGetDeviceInstanceId(devs, &dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
+                wcsstr(dev_id, dev_prefix) && ret && i < *iface_count) {
+            ret = get_dev_props(devs, &dev_info, cls[i], subcls[i], proto[i]);
+            i++;
+        }
+    }
+    return ret;
+}
+
+/* returns true if the device exists and passed the filter rules (or no filters at all).
+   has_winusb is true if winusb driver is installed on the device. */
+bool USBClerk::dev_filter_check(int vid, int pid, bool *has_winusb)
+{
+    HDEVINFO devs;
+    SP_DEVINFO_DATA dev_info;
+    uint8_t dev_cls, dev_subcls, dev_proto;
+    uint8_t *iface_cls, *iface_subcls, *iface_proto;
+    int iface_count = 0;
+    bool ret = false;
+
+    devs = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_ALLCLASSES | DIGCF_PRESENT);
+    if (devs == INVALID_HANDLE_VALUE) {
+        vd_printf("SetupDiGetClassDevsEx failed: %u", GetLastError());
+        return false;
+    }
+    if (!get_dev_info(devs, vid, pid, &dev_info, has_winusb)) {
+        goto cleanup;
+    }
+    if (!_filter_rules) {
+        ret = true;
+        goto cleanup;
+    }
+    if (!get_dev_props(devs, &dev_info, &dev_cls, &dev_subcls, &dev_proto) ||
+        !get_dev_ifaces(devs, vid, pid, &iface_count, &iface_cls, &iface_subcls, &iface_proto)) {
+        goto cleanup;
+    }
+    /* device_version_bcd is ignored, as it is unavailable via setup api.
+       we can get it when device is opened with libusb, which is currently not the case. */
+    if (usbredirfilter_check(_filter_rules, _filter_count, dev_cls, dev_subcls, dev_proto,
+            iface_cls, iface_subcls, iface_proto, iface_count, vid, pid, 0, 0) == 0) {
+        ret = true;
+    } else {
+        vd_printf("Device filter failed %04x:%04x", vid, pid);
+    }
+cleanup:
+    if (iface_count > 0) {
+         delete []iface_cls;
+         delete []iface_subcls;
+         delete []iface_proto;
+    }
+    SetupDiDestroyDeviceInfoList(devs);
+    return ret;
 }
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
