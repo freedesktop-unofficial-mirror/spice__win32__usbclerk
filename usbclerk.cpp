@@ -40,6 +40,7 @@ private:
     bool dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply);
     bool install_winusb_driver(int vid, int pid);
     bool remove_winusb_driver(int vid, int pid);
+    bool uninstall_inf(HDEVINFO devs, PSP_DEVINFO_DATA dev_info);
     bool remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info);
     bool rescan();
     bool get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *dev_info, bool *has_winusb);
@@ -479,7 +480,9 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
     if (get_dev_info(devs, vid, pid, &dev_info, &installed)) {
         if (installed) {
             vd_printf("Removing %04x:%04x", vid, pid);
-            ret = remove_dev(devs, &dev_info);
+            if (uninstall_inf(devs, &dev_info)) {
+                ret = remove_dev(devs, &dev_info);
+            }
         } else {
             vd_printf("WinUSB driver is not installed");
         }
@@ -487,6 +490,47 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
     SetupDiDestroyDeviceInfoList(devs);
     ret = ret && rescan();
     return ret;
+}
+
+bool USBClerk::uninstall_inf(HDEVINFO devs, PSP_DEVINFO_DATA dev_info)
+{
+    SP_DRVINFO_DATA drv_info;
+    SP_DRVINFO_DETAIL_DATA drv_info_detail;
+    SP_DEVINSTALL_PARAMS install_params = {0};
+    TCHAR *inf_filename;
+
+    install_params.cbSize = sizeof(SP_DEVINSTALL_PARAMS);
+    if (!SetupDiGetDeviceInstallParams(devs, dev_info, &install_params)) {
+        vd_printf("Failed to get device install params: %u", GetLastError());
+        return false;
+    }
+    install_params.FlagsEx |= DI_FLAGSEX_INSTALLEDDRIVER;
+    if (!SetupDiSetDeviceInstallParams(devs, dev_info, &install_params)) {
+        vd_printf("Failed to set device install params: %u", GetLastError());
+        return false;
+    }
+    if (!SetupDiBuildDriverInfoList(devs, dev_info, SPDIT_CLASSDRIVER)) {
+        vd_printf("Cannot build driver info list: %u", GetLastError());
+        return false;
+    }
+    drv_info.cbSize = sizeof(SP_DRVINFO_DATA);
+    if (!SetupDiEnumDriverInfo(devs, dev_info, SPDIT_CLASSDRIVER, 0, &drv_info)) {
+        vd_printf("Failed to enumerate driver info: %u", GetLastError());
+        return false;
+    }
+    drv_info_detail.cbSize = sizeof(drv_info_detail);
+    if (!SetupDiGetDriverInfoDetail(devs, dev_info, &drv_info, &drv_info_detail,
+            sizeof(drv_info_detail), NULL) && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        vd_printf("Cannot get driver info detail: %u", GetLastError());
+        return false;
+    }
+    vd_printf("Uninstalling inf: %S", drv_info_detail.InfFileName);
+    inf_filename = wcsrchr(drv_info_detail.InfFileName, '\\') + 1;
+    if (!SetupUninstallOEMInf(inf_filename, SUOI_FORCEDELETE, NULL)) {
+        vd_printf("Failed to uninstall inf: %u", GetLastError());
+        return false;
+    }
+    return true;
 }
 
 bool USBClerk::remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info)
