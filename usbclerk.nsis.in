@@ -1,0 +1,184 @@
+#!Nsis Installer Command Script
+#
+# This is an NSIS Installer Command Script generated automatically
+# by the Fedora nsiswrapper program.  For more information see:
+#
+#   http://nsis.sourceforge.net
+#
+# To build an installer from the script you would normally do:
+#
+#   makensis usbclerk-installer.nsis
+#
+# which will generate the output file 'usbclerk-installer.exe' which is a Windows
+# installer containing your program.
+
+# Modern UI example script
+!include MUI.nsh
+!include x64.nsh
+
+!define MyName usbclerk
+!define MySetup ${MyName}-setup
+
+!define VERSION @VERSION@
+
+!define SpiceRegKey    "Software\Spice"
+!define UsbClerkRegKey "Software\Spice\${MyName}"
+!define RemoveRegKey   "Software\Microsoft\Windows\CurrentVersion\Uninstall\${MyName}"
+
+Name ${MyName}
+OutFile ${MySetup}.exe
+
+InstallDir "$WINDIR\Installer\${MyName}"
+InstallDirRegKey HKLM ${UsbClerkRegKey} InstallDir
+
+
+RequestExecutionLevel admin
+ShowInstDetails hide
+ShowUninstDetails hide
+
+SetCompressor lzma
+
+XPStyle on
+
+#!define MUI_ABORTWARNING
+#!define MUI_FINISHPAGE_NOAUTOCLOSE
+#!define MUI_UNFINISHPAGE_NOAUTOCLOSE
+
+# !insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "English"
+
+#DirText "Please select the installation folder."
+
+#--------------------------------
+#Version Information
+  VIProductVersion ${VERSION}
+  VIAddVersionKey "ProductName" "${MySetup}"
+  VIAddVersionKey "CompanyName" "Red Hat"
+  VIAddVersionKey "LegalCopyright" "Red Hat Inc   2012"
+  VIAddVersionKey "FileDescription" "An installer for usbclerk service"
+  VIAddVersionKey "FileVersion" ${VERSION}
+#--------------------------------
+
+# abort if not admin
+!macro verify_admin id
+  DetailPrint "Checking admin privileges"
+
+  #  ClearErrors
+  #  UserInfo::GetName
+  #  IfErrors usbclerk_install_fail_get_user
+  UserInfo::GetAccountType
+  Pop $0
+  StrCmp $0 "Admin" ${id}_user_is_admin ${id}_user_is_not_admin
+${id}_user_is_not_admin:
+  DetailPrint "User does not have admin privileges ... aborting"
+  messageBox MB_OK "User does not have admin privileges ... aborting"
+  Abort
+${id}_user_is_admin:
+  DetailPrint "User has admin privileges"
+!macroend
+
+# work on 64 bit OS too.
+!macro work_on_64
+  ${If} ${RunningX64}
+    ${DisableX64FSRedirection}
+    SetRegView 64
+  ${EndIf}
+!macroend
+
+Function .onInit
+  !insertmacro verify_admin "onInit"
+  !insertmacro work_on_64
+FunctionEnd
+
+Function un.onInit
+  !insertmacro verify_admin "un.onInit"
+  !insertmacro work_on_64
+FunctionEnd
+
+!macro compare_versions f
+  IfFileExists ${f} +1 compare_versions_done
+
+  ${GetFileVersion} ${f} $0
+
+  ${VersionCompare} $0 ${VERSION} $1
+
+  StrCmp $1 2 compare_versions_done # a newer version is now being installed
+
+  # we are here ==> a newer version is installed so bail out
+  DetailPrint "About to install ${MyName} of version ${VERSION}"
+  DetailPrint "${MyName} of version $0 is already installed"
+  DetailPrint "A Newer (or equal) version is already installed -- aborting"
+  Abort
+
+compare_versions_done:
+  DetailPrint "Go on with ${MyName} installation"
+!macroend
+
+!macro stop_and_remove_service
+  ReadRegStr $1 HKLM ${UsbClerkRegKey} InstDir
+  ReadEnvStr $0 COMSPEC
+  nsExec::ExecToLog '$0 /C net stop usbclerk'
+  nsExec::ExecToLog '$0 /C "$1\usbclerk.exe" uninstall'
+  Delete "$1\Uninstall_usbclerk.exe"
+  Delete "$1\usbclerk.exe"
+!macroend
+
+
+#
+# FixMe check  version
+Function uninstall_if_needed
+  ReadRegStr $0 HKLM ${UsbClerkRegKey} Uninstall
+  StrCmp $0 "" uninstall_is_not_needed uninstall_is_needed
+uninstall_is_needed:
+  DetailPrint "Removing already installed ${MyName} service"
+  !insertmacro stop_and_remove_service
+  DetailPrint "Done, installation of new ${MyName} continues"
+uninstall_is_not_needed:
+FunctionEnd
+
+
+
+Section "Install"
+  SectionIn RO
+
+  # !insertmacro verify_admin install
+
+  # uncomment this when usbclerk.exe gets a real version
+  # ReadRegStr $0 HKLM ${UsbClerkRegKey} InstDir
+  # !insertmacro compare_versions $0\usbclerk.exe
+
+  Call uninstall_if_needed
+
+  SetOutPath "$INSTDIR"
+
+  File usbclerk.exe
+  ReadEnvStr $0 COMSPEC
+  nsExec::ExecToLog '$0 /C "$INSTDIR\usbclerk.exe" install'
+  nsExec::ExecToLog '$0 /C net start usbclerk'
+  WriteUninstaller Uninstall_usbclerk.exe
+  WriteRegStr HKLM ${UsbClerkRegKey} "Uninstall" "$INSTDIR\Uninstall_usbclerk.exe"
+  WriteRegStr HKLM ${UsbClerkRegKey} "InstDir" "$INSTDIR"
+
+  # add uninstall info
+  WriteRegStr HKLM "${RemoveRegKey}" "DisplayName" \
+                   "UsbClerk -- A service for installing WinUSB drivers"
+  WriteRegStr HKLM "${RemoveRegKey}" "UninstallString" \
+                   "$\"$INSTDIR\Uninstall_usbclerk.exe$\""
+SectionEnd
+
+Section "Uninstall"
+  # !insertmacro verify_admin uninstall
+  !insertmacro stop_and_remove_service
+  RMDir "$INSTDIR"
+  DeleteRegKey HKLM "${UsbClerkRegKey}\Uninstall"
+  DeleteRegKey HKLM "${UsbClerkRegKey}\InstDir"
+  DeleteRegKey /ifempty HKLM "${UsbClerkRegKey}"
+  DeleteRegKey /ifempty HKLM "${SpiceRegKey}"
+
+  # delete uninstall info
+  DeleteRegKey HKLM "${RemoveRegKey}\DisplayName"
+  DeleteRegKey HKLM "${RemoveRegKey}\UninstallString"
+  DeleteRegKey /ifempty HKLM "${RemoveRegKey}"
+SectionEnd
