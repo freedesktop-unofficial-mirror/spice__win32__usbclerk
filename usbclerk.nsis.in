@@ -125,6 +125,9 @@ compare_versions_done:
   nsExec::ExecToLog '$0 /C "$1\usbclerk.exe" uninstall'
   Delete "$1\Uninstall_usbclerk.exe"
   Delete "$1\usbclerk.exe"
+  Delete "$1\license.rtf"
+  Delete "$1\GPL"
+  Delete "$1\LICENSE"
 !macroend
 
 
@@ -156,6 +159,9 @@ Section "Install"
   SetOutPath "$INSTDIR"
 
   File usbclerk.exe
+  File license.rtf
+  File GPL
+  File LICENSE
   ReadEnvStr $0 COMSPEC
   nsExec::ExecToLog '$0 /C "$INSTDIR\usbclerk.exe" install'
   nsExec::ExecToLog '$0 /C net start usbclerk'
