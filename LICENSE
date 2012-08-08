@@ -1,0 +1,31 @@
+Copyright 2012 Red Hat, Inc. and/or its affiliates.
+
+usbclerk uses the libwdi library <https://github.com/pbatard/libwdi>
+Copyright 2010-2011 Pete Batard <pete@akeo.ie>
+Copyright 2010-2011 Travis Robinson <libusbdotnet@gmail.com>
+
+The source code of usbclerk is licensed under the GNU General Public
+License, version 3 ("GPLv3") or (at your option) any later version
+published by the Free Software Foundation. See the accompanying file
+GPL or <http://www.gnu.org/licenses/gpl.html> for details.
+
+Portions of binary versions of usbclerk are "Distributable Code"
+(hereinafter referred to as "WDK Distributable Code") from the
+Microsoft Windows Driver Kit (the "WDK"), as defined in the
+accompanying license document license.rtf (the "Microsoft License").
+Please read the Microsoft License. 
+
+By using binary versions of usbclerk, you accept the terms of the
+Microsoft License with respect to WDK Distributable Code to the same
+degree as though you had developed usbclerk and libwdi yourself using
+the WDK. If you do not accept the terms of the Microsoft License, do
+not use usbclerk. Moreover, by using binary versions of usbclerk that
+contain WDK Distributable Code, you must indemnify, defend and hold
+harmless Red Hat, Inc. from any claims, including attorney's fees,
+related to your distribution or use of such binary versions.
+
+With respect to binary versions of usbclerk, GPLv3 does not extend to
+any WDK Distributable Code. All WDK Distributable Code is considered
+by the licensors of usbclerk to constitute, or be equivalent to,
+"System Libraries" as defined in section 1 of GPLv3.
+
