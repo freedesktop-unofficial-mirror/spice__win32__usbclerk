@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <tchar.h>
+#include <list>
 #include "usbclerk.h"
 #include "usbredirfilter.h"
 #include "libwdi.h"
@@ -18,6 +19,7 @@
 #define USB_CLERK_LOG_PATH          TEXT("%susbclerk.log")
 #define USB_CLERK_PIPE_TIMEOUT      10000
 #define USB_CLERK_PIPE_BUF_SIZE     1024
+#define USB_CLERK_PIPE_MAX_CLIENTS  32
 #define USB_DRIVER_PATH             "%S\\wdi_usb_driver"
 #define USB_DRIVER_INFNAME_LEN      64
 #define USB_DRIVER_INSTALL_RETRIES  10
@@ -25,6 +27,14 @@
 #define MAX_DEVICE_PROP_LEN         256
 #define MAX_DEVICE_HCID_LEN         1024
 #define MAX_DEVICE_FILTER_LEN       1024
+
+typedef struct USBDev {
+    UINT16 vid;
+    UINT16 pid;
+    bool auto_remove;
+} USBDev;
+
+typedef std::list<USBDev> USBDevs;
 
 class USBClerk {
 public:
@@ -37,7 +47,7 @@ public:
 private:
     USBClerk();
     bool execute();
-    bool dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply);
+    bool dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply, USBDevs *devs);
     bool install_winusb_driver(int vid, int pid);
     bool remove_winusb_driver(int vid, int pid);
     bool uninstall_inf(HDEVINFO devs, PSP_DEVINFO_DATA dev_info);
@@ -51,6 +61,7 @@ private:
     bool dev_filter_check(int vid, int pid, bool *has_winusb);
     static DWORD WINAPI control_handler(DWORD control, DWORD event_type,
                                         LPVOID event_data, LPVOID context);
+    static DWORD WINAPI pipe_thread(LPVOID param);
     static VOID WINAPI main(DWORD argc, TCHAR * argv[]);
 
 private:
@@ -60,7 +71,6 @@ private:
     struct usbredirfilter_rule *_filter_rules;
     int _filter_count;
     char _wdi_path[MAX_PATH];
-    HANDLE _pipe;
     bool _running;
     VDLog* _log;
 };
@@ -276,11 +286,9 @@ bool USBClerk::execute()
 {
     SECURITY_ATTRIBUTES sec_attr;
     SECURITY_DESCRIPTOR* sec_desr;
-    USBClerkReply reply = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
-        USB_CLERK_REPLY, sizeof(USBClerkReply)}};
     CHAR filter_str[MAX_DEVICE_FILTER_LEN];
-    CHAR buffer[USB_CLERK_PIPE_BUF_SIZE];
-    DWORD bytes;
+    HANDLE pipe, thread;
+    DWORD tid;
     HKEY hkey;
     LONG ret;
 
@@ -296,14 +304,6 @@ bool USBClerk::execute()
     sec_attr.nLength = sizeof(sec_attr);
     sec_attr.bInheritHandle = TRUE;
     sec_attr.lpSecurityDescriptor = sec_desr;
-    _pipe = CreateNamedPipe(USB_CLERK_PIPE_NAME, PIPE_ACCESS_DUPLEX |
-                            FILE_FLAG_FIRST_PIPE_INSTANCE,
-                            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, 1,
-                            USB_CLERK_PIPE_BUF_SIZE, USB_CLERK_PIPE_BUF_SIZE, 0, &sec_attr);
-    if (_pipe == INVALID_HANDLE_VALUE) {
-        vd_printf("CreatePipe() failed: %u", GetLastError());
-        return false;
-    }
 
     /* Read filter rules from registry */
     ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"Software\\USBClerk", 0, KEY_READ, &hkey);
@@ -323,34 +323,62 @@ bool USBClerk::execute()
         RegCloseKey(hkey);
     }
     while (_running) {
-        if (!ConnectNamedPipe(_pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
-            vd_printf("ConnectNamedPipe() failed: %u", GetLastError());
+        pipe = CreateNamedPipe(USB_CLERK_PIPE_NAME, PIPE_ACCESS_DUPLEX,
+                               PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                               USB_CLERK_PIPE_MAX_CLIENTS, USB_CLERK_PIPE_BUF_SIZE,
+                               USB_CLERK_PIPE_BUF_SIZE, 0, &sec_attr);
+        if (pipe == INVALID_HANDLE_VALUE) {
+            vd_printf("CreatePipe() failed: %u", GetLastError());
             break;
         }
-        if (!ReadFile(_pipe, &buffer, sizeof(buffer), &bytes, NULL)) {
-            vd_printf("ReadFile() failed: %d", GetLastError());
-            goto disconnect;
+        if (!ConnectNamedPipe(pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
+            vd_printf("ConnectNamedPipe() failed: %u", GetLastError());
+            CloseHandle(pipe);
+            break;
         }
-        if (!dispatch_message(buffer, bytes, &reply)) {
-            goto disconnect;
+        thread = CreateThread(NULL, 0, pipe_thread, (LPVOID)pipe, 0, &tid);
+        if (thread == NULL) {
+            vd_printf("CreateThread() failed: %u", GetLastError());
+            break;
         }
-        if (!WriteFile(_pipe, &reply, sizeof(reply), &bytes, NULL)) {
-            vd_printf("WriteFile() failed: %d", GetLastError());
-            goto disconnect;
-        }
-        FlushFileBuffers(_pipe);
-disconnect:
-        DisconnectNamedPipe(_pipe);
+        CloseHandle(thread);
     }
     free(_filter_rules);
-    CloseHandle(_pipe);
     return true;
 }
 
-bool USBClerk::dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply)
+DWORD WINAPI USBClerk::pipe_thread(LPVOID param)
+{
+    USBClerkReply reply = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
+        USB_CLERK_REPLY, sizeof(USBClerkReply)}};
+    CHAR buffer[USB_CLERK_PIPE_BUF_SIZE];
+    HANDLE pipe = (HANDLE)param;
+    USBClerk* usbclerk = get();
+    USBDevs devs;
+    DWORD bytes;
+
+    while (usbclerk->_running) {
+        if (!ReadFile(pipe, &buffer, sizeof(buffer), &bytes, NULL) ||
+            !usbclerk->dispatch_message(buffer, bytes, &reply, &devs) ||
+            !WriteFile(pipe, &reply, sizeof(reply), &bytes, NULL)) {
+            break;
+        }
+        FlushFileBuffers(pipe);
+    }
+    DisconnectNamedPipe(pipe);
+    CloseHandle(pipe);
+    for (USBDevs::iterator dev = devs.begin(); dev != devs.end(); dev++) {
+        if (dev->auto_remove) {
+            usbclerk->remove_winusb_driver(dev->vid, dev->pid);
+        }
+    }
+    return 0;
+}
+
+bool USBClerk::dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply, USBDevs *devs)
 {
     USBClerkHeader *hdr = (USBClerkHeader *)buffer;
-    USBClerkDriverOp *dev;
+    USBClerkDriverOp *op;
 
     if (hdr->magic != USB_CLERK_MAGIC) {
         vd_printf("Bad message received, magic %u", hdr->magic);
@@ -360,15 +388,28 @@ bool USBClerk::dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply)
         vd_printf("Wrong mesage size %u type %u", hdr->size, hdr->type);
         return false;
     }
-    dev = (USBClerkDriverOp *)buffer;
+    op = (USBClerkDriverOp *)buffer;
     switch (hdr->type) {
+    case USB_CLERK_DRIVER_SESSION_INSTALL:
     case USB_CLERK_DRIVER_INSTALL:
-        vd_printf("Installing winusb driver for %04x:%04x", dev->vid, dev->pid);
-        reply->status = install_winusb_driver(dev->vid, dev->pid);
+        vd_printf("Installing winusb driver for %04x:%04x", op->vid, op->pid);
+        reply->status = install_winusb_driver(op->vid, op->pid);
+        if (reply->status) {
+            USBDev dev = {op->vid, op->pid, hdr->type == USB_CLERK_DRIVER_SESSION_INSTALL};
+            devs->push_back(dev);
+        }
         break;
     case USB_CLERK_DRIVER_REMOVE:
-        vd_printf("Removing winusb driver for %04x:%04x", dev->vid, dev->pid);
-        reply->status = remove_winusb_driver(dev->vid, dev->pid);        
+        // FIXME: check device is not used by another client
+        vd_printf("Removing winusb driver for %04x:%04x", op->vid, op->pid);
+        reply->status = remove_winusb_driver(op->vid, op->pid);
+        // remove device from list to prevent another driver removal in pipe disconnect
+        for (USBDevs::iterator d = devs->begin(); d != devs->end(); d++) {
+            if (d->vid == op->vid && d->pid == op->pid) {
+                devs->erase(d);
+                break;
+            }
+        }
         break;
     default:
         vd_printf("Unknown message received, type %u", hdr->type);

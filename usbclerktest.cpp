@@ -1,19 +1,35 @@
 #include <stdio.h>
+#include <conio.h>
 #include <tchar.h>
 #include "usbclerk.h"
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
     HANDLE pipe;
-    USBClerkDriverOp dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION, 0, sizeof(USBClerkDriverOp)}};
+    USBClerkDriverOp dev = {{USB_CLERK_MAGIC, USB_CLERK_VERSION,
+        USB_CLERK_DRIVER_INSTALL, sizeof(USBClerkDriverOp)}};
     USBClerkReply reply;
     DWORD pipe_mode;
     DWORD bytes = 0;
-    bool do_remove = false;
+    bool err = false;
+    int i, devs = 0;
 
-    if (argc < 2 || swscanf_s(argv[argc - 1], L"%hx:%hx", &dev.vid, &dev.pid) < 2 ||
-                               (argc == 3 && !(do_remove = !wcscmp(argv[1], L"/u")))) {
-        printf("Usage: usbclerktest [/u] vid:pid\n/u - uninstall driver\nvid:pid in hex\n");
+    for (i = 1; i < argc && !err; i++) {
+        if (wcscmp(argv[i], L"/t") == 0) {
+            dev.hdr.type = USB_CLERK_DRIVER_SESSION_INSTALL;
+        } else if (wcscmp(argv[i], L"/u") == 0) {
+            dev.hdr.type = USB_CLERK_DRIVER_REMOVE;
+        } else if (swscanf_s(argv[i], L"%hx:%hx", &dev.vid, &dev.pid) == 2) {
+            devs++;
+        } else {
+            err = true;
+        }
+    }
+    if (argc < 2 || err || devs < argc - 2) {
+        printf("Usage: usbclerktest [/t][/u] vid:pid [vid1:pid1...]\n"
+               "default - install driver for device vid:pid (in hex)\n"
+               "/t - temporary install until session terminated\n"
+               "/u - uninstall driver\n");
         return 1;
     }
     pipe = CreateFile(USB_CLERK_PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
@@ -27,29 +43,40 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         printf("SetNamedPipeHandleState() failed: %d\n", GetLastError());
         return 1;
     }
-    if (do_remove) {
-        printf("Removing %04x:%04x\n", dev.vid, dev.pid);
-        dev.hdr.type = USB_CLERK_DRIVER_REMOVE;
-    } else {
-        printf("Signing & installing %04x:%04x\n", dev.vid, dev.pid);
-        dev.hdr.type = USB_CLERK_DRIVER_INSTALL;
+
+    for (i = 1; i < argc && !err; i++) {
+        if (swscanf_s(argv[i], L"%hx:%hx", &dev.vid, &dev.pid) < 2) continue;
+        switch (dev.hdr.type) {
+        case USB_CLERK_DRIVER_SESSION_INSTALL:
+        case USB_CLERK_DRIVER_INSTALL:
+            printf("Signing & installing %04x:%04x...", dev.vid, dev.pid);
+            break;
+        case USB_CLERK_DRIVER_REMOVE:
+            printf("Removing %04x:%04x...", dev.vid, dev.pid);
+            break;
+        }
+        if (!TransactNamedPipe(pipe, &dev, sizeof(dev), &reply, sizeof(reply), &bytes, NULL)) {
+            printf("TransactNamedPipe() failed: %d\n", GetLastError());
+            CloseHandle(pipe);
+            return 1;
+        }
+        if (reply.hdr.magic != USB_CLERK_MAGIC || reply.hdr.type != USB_CLERK_REPLY ||
+                reply.hdr.size != sizeof(USBClerkReply)) {
+            printf("Unknown message received, magic 0x%x type %u size %u\n",
+                   reply.hdr.magic, reply.hdr.type, reply.hdr.size);
+            return 1;
+        }
+        if (reply.status) {
+            printf("Completed successfully\n");
+        } else {
+            printf("Failed\n");
+        }
     }
-    if (!TransactNamedPipe(pipe, &dev, sizeof(dev), &reply, sizeof(reply), &bytes, NULL)) {
-        printf("TransactNamedPipe() failed: %d\n", GetLastError());
-        CloseHandle(pipe);
-        return 1;
+
+    if (dev.hdr.type == USB_CLERK_DRIVER_SESSION_INSTALL) {
+        printf("Hit any key to terminate session\n");
+        _getch();
     }
     CloseHandle(pipe);
-    if (reply.hdr.magic != USB_CLERK_MAGIC || reply.hdr.type != USB_CLERK_REPLY ||
-            reply.hdr.size != sizeof(USBClerkReply)) {
-        printf("Unknown message received, magic 0x%x type %u size %u\n",
-               reply.hdr.magic, reply.hdr.type, reply.hdr.size);
-        return 1;
-    }
-    if (reply.status) {
-        printf("Completed successfully\n");
-    } else {
-        printf("Failed\n");
-    }
     return 0;
 }
