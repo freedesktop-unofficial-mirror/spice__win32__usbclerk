@@ -1,0 +1,17 @@
+ACLOCAL_AMFLAGS = -I m4
+NULL =
+
+bin_PROGRAMS = usbclerk usbclerktest
+
+usbclerk_LDFLAGS = $(LIBWDI_LIBS) -lversion -all-static
+usbclerk_CPPFLAGS = $(LIBWDI_CFLAGS)
+usbclerk_SOURCES = usbclerk.cpp vdlog.cpp usbclerk.h vdlog.h
+
+usbclerktest_LDFLAGS =
+usbclerktest_SOURCES = usbclerktest.cpp
+
+EXTRA_DIST = usbclerk.nsis
+
+usbclerk-setup.exe: usbclerk.nsis
+	makensis $^
+
