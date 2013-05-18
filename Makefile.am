@@ -3,8 +3,8 @@ NULL =
 
 bin_PROGRAMS = usbclerk usbclerktest
 
-usbclerk_LDFLAGS = $(LIBWDI_LIBS) -lversion -all-static
-usbclerk_CPPFLAGS = $(LIBWDI_CFLAGS)
+usbclerk_LDFLAGS = $(USBCLERK_LIBS) -lversion -lsetupapi -all-static
+usbclerk_CPPFLAGS = $(USBCLERK_CFLAGS)
 usbclerk_SOURCES = usbclerk.cpp vdlog.cpp usbclerk.h vdlog.h
 
 usbclerktest_LDFLAGS =
