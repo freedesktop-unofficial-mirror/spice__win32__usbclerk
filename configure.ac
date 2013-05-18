@@ -7,6 +7,17 @@ AM_CONFIG_HEADER([config.h])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 -Wall -Werror])
 AM_MAINTAINER_MODE([enable])
+AC_CANONICAL_HOST
+
+case "$host" in
+    amd64*|x86_64*)
+        WIXL_ARCH="x64"
+    ;;
+    *)
+        WIXL_ARCH="x86"
+    ;;
+esac
+AC_SUBST(WIXL_ARCH)
 
 LT_INIT
 AC_PROG_CXX

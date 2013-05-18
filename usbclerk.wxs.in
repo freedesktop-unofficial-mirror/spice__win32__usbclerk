@@ -54,12 +54,16 @@
                             Remove="uninstall"
                             Wait="yes"/>
           </Component>
+          <Component Id="CDepsTxt" Guid="be86cc16-bf4d-11e2-bbde-0024d71e178c">
+            <File Id='depstxt' Name='deps.txt' DiskId='1' Source='deps.txt' KeyPath='yes'/>
+          </Component>
         </Directory>
       </Directory>
     </Directory>
 
     <Feature Id="Complete"  Level="1">
       <ComponentRef Id="CUSBClerk"/>
+      <ComponentRef Id="CDepsTxt"/>
     </Feature>
 
   </Product>
