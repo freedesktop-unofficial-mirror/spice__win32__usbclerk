@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <?define Version = "@VERSION@"?>
+  <?define UpgradeCode = "4a2c31e6-b10b-4c56-be28-c1ac35f5c52e"?>
+  <Product Id="*" Name="USB Clerk" Manufacturer="$(env.MANUFACTURER)"
+           Version="$(var.Version)" UpgradeCode="$(var.UpgradeCode)"
+           Language="1033">
+
+    <Package InstallerVersion="200" Compressed="yes" Comments="comments"/>
+    <Media Id="1" Cabinet="cabinet.cab" EmbedCab="yes"/>
+
+    <Property Id="ARPHELPLINK" Value="http://www.spice-space.org"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Property Id="ARPNOREPAIR" Value="1"/>
+    <Upgrade Id="$(var.UpgradeCode)">
+      <UpgradeVersion Minimum="$(var.Version)" OnlyDetect="yes" Property="NEWERVERSIONDETECTED"/>
+      <UpgradeVersion Minimum="0.0.0" Maximum="$(var.Version)" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED"/>
+    </Upgrade>
+    <Condition Message="USB Clerk is already installed.">NOT NEWERVERSIONDETECTED</Condition>
+    <InstallExecuteSequence>
+      <RemoveExistingProducts After="InstallValidate"/>
+    </InstallExecuteSequence>
+
+    <!-- try to uninstall NSIS -->
+    <Property Id='NSISINSTALL'>
+      <RegistrySearch Id='NSISSearch' Root='HKLM' Key='Software\Spice\usbclerk' Type="raw" Name='Uninstall'/>
+    </Property>
+    <CustomAction Id="NSISUninstall" Property="NSISINSTALL" ExeCommand="/S" Execute="deferred" Impersonate="no" Return="ignore"/>
+    <InstallExecuteSequence>
+      <AppSearch Sequence='1'/>
+      <Custom Action="NSISUninstall" After="InstallInitialize">NSISINSTALL AND NOT Installed</Custom>
+    </InstallExecuteSequence>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLDIR" Name="USBClerk">
+          <Component Id="CUSBClerk" Guid="e99861f7-524c-4107-860d-27f866072e53">
+            <File Id='usbclerkexe' Name='usbclerk.exe' DiskId='1' Source='usbclerk.exe' KeyPath='yes'/>
+            <ServiceInstall Id="USBClerkServiceInstall"
+                            Name="USBClerk"
+                            DisplayName="USB Clerk service"
+                            Description="A Spice service for USB redirection"
+                            Type="ownProcess"
+                            Start="auto"
+                            Account="[SERVICEACCOUNT]"
+                            Password="[SERVICEPASSWORD]"
+                            ErrorControl="normal"/>
+           <ServiceControl Id="StartService"
+                            Name="USBClerk"
+                            Start="install"
+                            Stop="both"
+                            Remove="uninstall"
+                            Wait="yes"/>
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Complete"  Level="1">
+      <ComponentRef Id="CUSBClerk"/>
+    </Feature>
+
+  </Product>
+</Wix>

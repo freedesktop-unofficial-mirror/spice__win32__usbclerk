@@ -10,8 +10,5 @@ usbclerk_SOURCES = usbclerk.cpp vdlog.cpp usbclerk.h vdlog.h
 usbclerktest_LDFLAGS =
 usbclerktest_SOURCES = usbclerktest.cpp
 
-EXTRA_DIST = usbclerk.nsis
-
-usbclerk-setup.exe: usbclerk.nsis
-	makensis $^
-
+EXTRA_DIST = usbclerk.wxs.in
+CONFIG_STATUS_DEPENDENCIES = usbclerk.wxs.in
