@@ -15,11 +15,11 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
     int i, devs = 0;
 
     for (i = 1; i < argc && !err; i++) {
-        if (wcscmp(argv[i], L"/t") == 0) {
+        if (lstrcmpi(argv[i], TEXT("/t")) == 0) {
             dev.hdr.type = USB_CLERK_DRIVER_SESSION_INSTALL;
-        } else if (wcscmp(argv[i], L"/u") == 0) {
+        } else if (lstrcmpi(argv[i], TEXT("/u")) == 0) {
             dev.hdr.type = USB_CLERK_DRIVER_REMOVE;
-        } else if (swscanf_s(argv[i], L"%hx:%hx", &dev.vid, &dev.pid) == 2) {
+        } else if (_stscanf(argv[i], TEXT("%hx:%hx"), &dev.vid, &dev.pid) == 2) {
             devs++;
         } else {
             err = true;
@@ -35,17 +35,17 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
     pipe = CreateFile(USB_CLERK_PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
                       0, NULL, OPEN_EXISTING, 0, NULL);
     if (pipe == INVALID_HANDLE_VALUE) {
-        printf("Cannot open pipe %S: %d\n", USB_CLERK_PIPE_NAME, GetLastError());
+        _tprintf(TEXT("Cannot open pipe %s: %lu\n"), USB_CLERK_PIPE_NAME, GetLastError());
         return 1;
     }
     pipe_mode = PIPE_READMODE_MESSAGE | PIPE_WAIT;
     if (!SetNamedPipeHandleState(pipe, &pipe_mode, NULL, NULL)) {
-        printf("SetNamedPipeHandleState() failed: %d\n", GetLastError());
+        printf("SetNamedPipeHandleState() failed: %lu\n", GetLastError());
         return 1;
     }
 
     for (i = 1; i < argc && !err; i++) {
-        if (swscanf_s(argv[i], L"%hx:%hx", &dev.vid, &dev.pid) < 2) continue;
+        if (_stscanf(argv[i], TEXT("%hx:%hx"), &dev.vid, &dev.pid) < 2) continue;
         switch (dev.hdr.type) {
         case USB_CLERK_DRIVER_SESSION_INSTALL:
         case USB_CLERK_DRIVER_INSTALL:
@@ -56,7 +56,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
             break;
         }
         if (!TransactNamedPipe(pipe, &dev, sizeof(dev), &reply, sizeof(reply), &bytes, NULL)) {
-            printf("TransactNamedPipe() failed: %d\n", GetLastError());
+            printf("TransactNamedPipe() failed: %lu\n", GetLastError());
             CloseHandle(pipe);
             return 1;
         }

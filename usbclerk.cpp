@@ -86,10 +86,10 @@ USBClerk* USBClerk::get()
 }
 
 USBClerk::USBClerk()
-    : _running (false)
-    , _status_handle (0)
+    : _status_handle (0)
     , _filter_rules (NULL)
     , _filter_count (0)
+    , _running (false)
     , _log (NULL)
 {
     _singleton = this;
@@ -103,7 +103,7 @@ USBClerk::~USBClerk()
 bool USBClerk::run()
 {
 #ifndef DEBUG_USB_CLERK
-    SERVICE_TABLE_ENTRY service_table[] = {{USB_CLERK_NAME, main}, {0, 0}};
+    SERVICE_TABLE_ENTRY service_table[] = {{(LPWSTR)USB_CLERK_NAME, main}, {0, 0}};
     return !!StartServiceCtrlDispatcher(service_table);
 #else
     main(0, NULL);
@@ -134,7 +134,7 @@ bool USBClerk::install()
                                       USB_CLERK_LOAD_ORDER_GROUP, 0, 0, 0, 0);
     if (service) {
         SERVICE_DESCRIPTION descr;
-        descr.lpDescription = USB_CLERK_DESCRIPTION;
+        descr.lpDescription = (LPWSTR)USB_CLERK_DESCRIPTION;
         if (!ChangeServiceConfig2(service, SERVICE_CONFIG_DESCRIPTION, &descr)) {
             printf("ChangeServiceConfig2 failed\n");
         }
@@ -145,7 +145,7 @@ bool USBClerk::install()
         printf("Service already exists\n");
         ret = true;
     } else {
-        printf("Service not installed successfully, error %d\n", GetLastError());
+        printf("Service not installed successfully, error %ld\n", GetLastError());
     }
     CloseServiceHandle(service_control_manager);
     return ret;
@@ -317,7 +317,7 @@ bool USBClerk::execute()
             if (ret == 0) {
                 vd_printf("Filter count: %d", _filter_count);
             } else {
-                vd_printf("Failed parsing filter rules: %d", ret);
+                vd_printf("Failed parsing filter rules: %ld", ret);
             }
         }
         RegCloseKey(hkey);
@@ -328,17 +328,17 @@ bool USBClerk::execute()
                                USB_CLERK_PIPE_MAX_CLIENTS, USB_CLERK_PIPE_BUF_SIZE,
                                USB_CLERK_PIPE_BUF_SIZE, 0, &sec_attr);
         if (pipe == INVALID_HANDLE_VALUE) {
-            vd_printf("CreatePipe() failed: %u", GetLastError());
+            vd_printf("CreatePipe() failed: %ld", GetLastError());
             break;
         }
         if (!ConnectNamedPipe(pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
-            vd_printf("ConnectNamedPipe() failed: %u", GetLastError());
+            vd_printf("ConnectNamedPipe() failed: %ld", GetLastError());
             CloseHandle(pipe);
             break;
         }
         thread = CreateThread(NULL, 0, pipe_thread, (LPVOID)pipe, 0, &tid);
         if (thread == NULL) {
-            vd_printf("CreateThread() failed: %u", GetLastError());
+            vd_printf("CreateThread() failed: %ld", GetLastError());
             break;
         }
         CloseHandle(thread);
@@ -381,7 +381,7 @@ bool USBClerk::dispatch_message(CHAR *buffer, DWORD bytes, USBClerkReply *reply,
     USBClerkDriverOp *op;
 
     if (hdr->magic != USB_CLERK_MAGIC) {
-        vd_printf("Bad message received, magic %u", hdr->magic);
+        vd_printf("Bad message received, magic %d", hdr->magic);
         return false;
     }
     if (hdr->size != sizeof(USBClerkDriverOp)) {
@@ -515,7 +515,7 @@ bool USBClerk::remove_winusb_driver(int vid, int pid)
 
     devs = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_ALLCLASSES);
     if (devs == INVALID_HANDLE_VALUE) {
-        vd_printf("SetupDiGetClassDevsEx failed: %u", GetLastError());
+        vd_printf("SetupDiGetClassDevsEx failed: %ld", GetLastError());
         return false;
     }
     if (get_dev_info(devs, vid, pid, &dev_info, &installed)) {
@@ -542,33 +542,33 @@ bool USBClerk::uninstall_inf(HDEVINFO devs, PSP_DEVINFO_DATA dev_info)
 
     install_params.cbSize = sizeof(SP_DEVINSTALL_PARAMS);
     if (!SetupDiGetDeviceInstallParams(devs, dev_info, &install_params)) {
-        vd_printf("Failed to get device install params: %u", GetLastError());
+        vd_printf("Failed to get device install params: %ld", GetLastError());
         return false;
     }
     install_params.FlagsEx |= DI_FLAGSEX_INSTALLEDDRIVER;
     if (!SetupDiSetDeviceInstallParams(devs, dev_info, &install_params)) {
-        vd_printf("Failed to set device install params: %u", GetLastError());
+        vd_printf("Failed to set device install params: %ld", GetLastError());
         return false;
     }
     if (!SetupDiBuildDriverInfoList(devs, dev_info, SPDIT_CLASSDRIVER)) {
-        vd_printf("Cannot build driver info list: %u", GetLastError());
+        vd_printf("Cannot build driver info list: %ld", GetLastError());
         return false;
     }
     drv_info.cbSize = sizeof(SP_DRVINFO_DATA);
     if (!SetupDiEnumDriverInfo(devs, dev_info, SPDIT_CLASSDRIVER, 0, &drv_info)) {
-        vd_printf("Failed to enumerate driver info: %u", GetLastError());
+        vd_printf("Failed to enumerate driver info: %ld", GetLastError());
         return false;
     }
     drv_info_detail.cbSize = sizeof(drv_info_detail);
     if (!SetupDiGetDriverInfoDetail(devs, dev_info, &drv_info, &drv_info_detail,
             sizeof(drv_info_detail), NULL) && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-        vd_printf("Cannot get driver info detail: %u", GetLastError());
+        vd_printf("Cannot get driver info detail: %ld", GetLastError());
         return false;
     }
     vd_printf("Uninstalling inf: %S", drv_info_detail.InfFileName);
     inf_filename = wcsrchr(drv_info_detail.InfFileName, '\\') + 1;
     if (!SetupUninstallOEMInf(inf_filename, SUOI_FORCEDELETE, NULL)) {
-        vd_printf("Failed to uninstall inf: %u", GetLastError());
+        vd_printf("Failed to uninstall inf: %ld", GetLastError());
         return false;
     }
     return true;
@@ -584,11 +584,11 @@ bool USBClerk::remove_dev(HDEVINFO devs, PSP_DEVINFO_DATA dev_info)
     rmd_params.HwProfile = 0;
     if (!SetupDiSetClassInstallParams(devs, dev_info,
             &rmd_params.ClassInstallHeader, sizeof(rmd_params))) {
-        vd_printf("Failed setting class remove params: %u", GetLastError());
+        vd_printf("Failed setting class remove params: %ld", GetLastError());
         return false;
     }
     if (!SetupDiCallClassInstaller(DIF_REMOVE, devs, dev_info)) {
-        vd_printf("Class remove failed: %u", GetLastError());
+        vd_printf("Class remove failed: %ld", GetLastError());
         return false;
     }
     return true;
@@ -599,11 +599,11 @@ bool USBClerk::rescan()
     DEVINST dev_root;
 
     if (CM_Locate_DevNode_Ex(&dev_root, NULL, CM_LOCATE_DEVNODE_NORMAL, NULL) != CR_SUCCESS) {
-        vd_printf("Device node cannot be located: %u", GetLastError());
+        vd_printf("Device node cannot be located: %ld", GetLastError());
         return false;
     }
     if (CM_Reenumerate_DevNode_Ex(dev_root, 0, NULL) != CR_SUCCESS) {
-        vd_printf("Device node enumeration failed: %u", GetLastError());
+        vd_printf("Device node enumeration failed: %ld", GetLastError());
         return false;
     }
     return true;
@@ -617,7 +617,7 @@ bool USBClerk::get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *de
     TCHAR service_name[MAX_DEVICE_PROP_LEN];
     bool dev_found = false;
 
-    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04X&PID_%04X\\", vid, pid);
+    _sntprintf(dev_prefix, MAX_DEVICE_ID_LEN, TEXT("USB\\VID_%04X&PID_%04X\\"), vid, pid);
     dev_info->cbSize = sizeof(*dev_info);
     for (DWORD dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, dev_info); dev_index++) {
         if (SetupDiGetDeviceInstanceId(devs, dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
@@ -634,7 +634,7 @@ bool USBClerk::get_dev_info(HDEVINFO devs, int vid, int pid, SP_DEVINFO_DATA *de
     }
     if (!SetupDiGetDeviceRegistryProperty(devs, dev_info, SPDRP_SERVICE, NULL,
             (PBYTE)service_name, sizeof(service_name), NULL)) {
-        vd_printf("Cannot get device service name %u", GetLastError());
+        vd_printf("Cannot get device service name %ld", GetLastError());
         *has_winusb = false;
         return true;
     }
@@ -650,10 +650,10 @@ bool USBClerk::get_dev_props(HDEVINFO devs, SP_DEVINFO_DATA *dev_info,
     *cls = *subcls = *proto = 0;
     if (!SetupDiGetDeviceRegistryProperty(devs, dev_info, SPDRP_COMPATIBLEIDS, NULL,
             (PBYTE)compat_ids, sizeof(compat_ids), NULL)) {
-        vd_printf("Cannot get compatible id %u", GetLastError());
+        vd_printf("Cannot get compatible id %ld", GetLastError());
         return false;
     }
-    if (swscanf_s(compat_ids, L"USB\\Class_%02hx&SubClass_%02hx&Prot_%02hx",
+    if (swscanf(compat_ids, L"USB\\Class_%02hx&SubClass_%02hx&Prot_%02hx",
             cls, subcls, proto) != 3) {
         vd_printf("Cannot parse compatible id %S", compat_ids);
         return false;
@@ -673,21 +673,21 @@ bool USBClerk::get_dev_ifaces(HDEVINFO devs, int vid, int pid, int *iface_count,
     bool ret = true;
     int i = 0;
 
-    swprintf(dev_prefix, MAX_DEVICE_ID_LEN, L"USB\\VID_%04X&PID_%04X\\&MI_", vid, pid);
+    _sntprintf(dev_prefix, MAX_DEVICE_ID_LEN, TEXT("USB\\VID_%04X&PID_%04X\\&MI_"), vid, pid);
     dev_info.cbSize = sizeof(dev_info);
     *iface_count = 0;
     /* count interfaces */
     for (dev_index = 0; SetupDiEnumDeviceInfo(devs, dev_index, &dev_info); dev_index++) {
         if (SetupDiGetDeviceInstanceId(devs, &dev_info, dev_id, MAX_DEVICE_ID_LEN, NULL) &&
                 wcsstr(dev_id, dev_prefix)) {
-            *iface_count++;
+            *iface_count += 1;
         }
     }
     if (!*iface_count) {
         *cls = *subcls = *proto = NULL;
         return true;
     }
-    vd_printf("iface_count %d", iface_count);
+    vd_printf("iface_count %d", *iface_count);
     *cls = new uint8_t[*iface_count];
     *subcls = new uint8_t[*iface_count];
     *proto = new uint8_t[*iface_count];
@@ -715,7 +715,7 @@ bool USBClerk::dev_filter_check(int vid, int pid, bool *has_winusb)
 
     devs = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_ALLCLASSES | DIGCF_PRESENT);
     if (devs == INVALID_HANDLE_VALUE) {
-        vd_printf("SetupDiGetClassDevsEx failed: %u", GetLastError());
+        vd_printf("SetupDiGetClassDevsEx failed: %ld", GetLastError());
         return false;
     }
     if (!get_dev_info(devs, vid, pid, &dev_info, has_winusb)) {
@@ -747,6 +747,7 @@ cleanup:
     return ret;
 }
 
+extern "C"
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
     bool success = false;
