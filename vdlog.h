@@ -61,11 +61,11 @@ static unsigned int log_level = LOG_INFO;
     VDLog* log = VDLog::get();                                                                  \
     const char *type_as_char[] = { "DEBUG", "INFO", "WARN", "ERROR", "FATAL" };                 \
     struct _timeb now;                                                                          \
-    struct tm today;                                                                            \
+    struct tm *today;                                                                            \
     char datetime_str[20];                                                                      \
-    _ftime_s(&now);                                                                             \
-    localtime_s(&today, &now.time);                                                             \
-    strftime(datetime_str, 20, "%Y-%m-%d %H:%M:%S", &today);                                    \
+    _ftime(&now);                                                                             \
+    today = localtime(&now.time);                                                             \
+    strftime(datetime_str, 20, "%Y-%m-%d %H:%M:%S", today);                                    \
     if (log) {                                                                                  \
         log->PRINT_LINE(type_as_char[type], format, datetime_str, now.millitm, ## __VA_ARGS__); \
     } else {                                                                                    \
