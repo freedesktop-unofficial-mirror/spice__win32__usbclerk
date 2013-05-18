@@ -44,7 +44,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;;VC"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -122,7 +122,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;;VC"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -199,7 +199,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;;VC"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -277,7 +277,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;"
+				AdditionalIncludeDirectories="&quot;$(LIBWDI_DIR)\libwdi&quot;;VC"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE,_WIN32_WINNT=0x0501"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -347,7 +347,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\usbredirfilter.h"
+				RelativePath="VC\usbredirfilter.h"
 				>
 			</File>
 			<File
@@ -375,7 +375,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\usbredirfilter.c"
+				RelativePath="VC\usbredirfilter.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
