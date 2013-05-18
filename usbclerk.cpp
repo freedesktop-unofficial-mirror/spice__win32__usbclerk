@@ -14,7 +14,7 @@
 
 #define USB_CLERK_DISPLAY_NAME      TEXT("USB Clerk")
 #define USB_CLERK_NAME              TEXT("usbclerk")
-#define USB_CLERK_DESCRIPTION       TEXT("Enables automathic winusb driver signing & install")
+#define USB_CLERK_DESCRIPTION       TEXT("Enables automatic winusb driver signing & install")
 #define USB_CLERK_LOAD_ORDER_GROUP  TEXT("")
 #define USB_CLERK_LOG_PATH          TEXT("%susbclerk.log")
 #define USB_CLERK_PIPE_TIMEOUT      10000
