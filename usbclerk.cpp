@@ -233,11 +233,11 @@ VOID WINAPI USBClerk::main(DWORD argc, TCHAR* argv[])
     TCHAR path[MAX_PATH];
 
     if (GetTempPath(MAX_PATH, path)) {
-        swprintf_s(log_path, MAX_PATH, USB_CLERK_LOG_PATH, path);
+        _sntprintf(log_path, MAX_PATH, USB_CLERK_LOG_PATH, path);
         s->_log = VDLog::get(log_path);
     }
     if (GetSystemDirectory(path, MAX_PATH)) {
-        sprintf_s(s->_wdi_path, MAX_PATH, USB_DRIVER_PATH, path);
+        _snprintf(s->_wdi_path, MAX_PATH, USB_DRIVER_PATH, path);
     }
     vd_printf("***Service started***");
     SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
@@ -464,7 +464,7 @@ bool USBClerk::install_winusb_driver(int vid, int pid)
     vd_printf("Device %04x:%04x found", vid, pid);
 
     /* inf filename is built out of vid and pid */
-    r = sprintf_s(infname, sizeof(infname), "usb_device_%04x_%04x.inf", vid, pid);
+    r = snprintf(infname, sizeof(infname), "usb_device_%04x_%04x.inf", vid, pid);
     if (r <= 0) {
         vd_printf("inf file naming failed (%d)", r);
         goto cleanup;
