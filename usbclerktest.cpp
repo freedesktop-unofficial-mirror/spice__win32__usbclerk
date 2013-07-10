@@ -3,6 +3,7 @@
 #include <tchar.h>
 #include "usbclerk.h"
 
+extern "C"
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
     HANDLE pipe;
