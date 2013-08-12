@@ -4,7 +4,19 @@
 
   <?define Version = "@VERSION@"?>
   <?define UpgradeCode = "4a2c31e6-b10b-4c56-be28-c1ac35f5c52e"?>
-  <Product Id="*" Name="USB Clerk" Manufacturer="$(env.MANUFACTURER)"
+  <?define Arch = "@WIXL_ARCH@"?>
+  <?if $(var.Arch) = "x64"?>
+      <?define ArchString = "64-bit"?>
+      <?define ArchProgramFilesFolder = "ProgramFiles64Folder"?>
+      <?define Win64 = "yes"?>
+  <?else?>
+      <?define ArchString = "32-bit"?>
+      <?define ArchProgramFilesFolder = "ProgramFilesFolder"?>
+      <?define Win64 = "no"?>
+  <?endif?>
+
+  <Product Id="*" Name="USB Clerk ($(var.ArchString))"
+           Manufacturer="$(env.MANUFACTURER)"
            Version="$(var.Version)" UpgradeCode="$(var.UpgradeCode)"
            Language="1033">
 
@@ -25,16 +37,17 @@
 
     <!-- try to uninstall NSIS -->
     <Property Id='NSISINSTALL'>
-      <RegistrySearch Id='NSISSearch' Root='HKLM' Key='Software\Spice\usbclerk' Type="raw" Name='Uninstall'/>
+      <RegistrySearch Id='NSISSearch' Root='HKLM'
+                      Key='SOFTWARE\Spice\usbclerk' Type="raw"
+                      Name='Uninstall' Win64="$(var.Win64)"/>
     </Property>
     <CustomAction Id="NSISUninstall" Property="NSISINSTALL" ExeCommand="/S" Execute="deferred" Impersonate="no" Return="ignore"/>
     <InstallExecuteSequence>
-      <AppSearch Sequence='1'/>
       <Custom Action="NSISUninstall" After="InstallInitialize">NSISINSTALL AND NOT Installed</Custom>
     </InstallExecuteSequence>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
+      <Directory Id="$(var.ArchProgramFilesFolder)">
         <Directory Id="INSTALLDIR" Name="USBClerk">
           <Component Id="CUSBClerk" Guid="e99861f7-524c-4107-860d-27f866072e53">
             <File Id='usbclerkexe' Name='usbclerk.exe' DiskId='1' Source='usbclerk.exe' KeyPath='yes'/>
