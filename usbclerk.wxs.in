@@ -32,7 +32,7 @@
     </Upgrade>
     <Condition Message="USB Clerk is already installed.">NOT NEWERVERSIONDETECTED</Condition>
     <InstallExecuteSequence>
-      <RemoveExistingProducts After="InstallValidate"/>
+      <RemoveExistingProducts After="InstallFinalize"/>
     </InstallExecuteSequence>
 
     <!-- try to uninstall NSIS -->
