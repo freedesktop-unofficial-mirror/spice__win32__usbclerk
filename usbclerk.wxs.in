@@ -2,7 +2,7 @@
 
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
-  <?define Version = "@VERSION@"?>
+  <?define Version = "@WINDOWS_PRODUCTVERSION@"?>
   <?define UpgradeCode = "4a2c31e6-b10b-4c56-be28-c1ac35f5c52e"?>
   <?define Arch = "@WIXL_ARCH@"?>
   <?if $(var.Arch) = "x64"?>
@@ -15,7 +15,7 @@
       <?define Win64 = "no"?>
   <?endif?>
 
-  <Product Id="*" Name="USB Clerk ($(var.ArchString))"
+  <Product Id="*" Name="USBClerk @VERSION@@BUILDID@ ($(var.ArchString))"
            Manufacturer="$(env.MANUFACTURER)"
            Version="$(var.Version)" UpgradeCode="$(var.UpgradeCode)"
            Language="1033">
@@ -49,7 +49,7 @@
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="$(var.ArchProgramFilesFolder)">
         <Directory Id="INSTALLDIR" Name="USBClerk">
-          <Component Id="CUSBClerk" Guid="e99861f7-524c-4107-860d-27f866072e53">
+          <Component Id="CUSBClerk" Guid="*">
             <File Id='usbclerkexe' Name='usbclerk.exe' DiskId='1' Source='usbclerk.exe' KeyPath='yes'/>
             <ServiceInstall Id="USBClerkServiceInstall"
                             Name="USBClerk"
@@ -67,7 +67,7 @@
                             Remove="uninstall"
                             Wait="yes"/>
           </Component>
-          <Component Id="CDepsTxt" Guid="be86cc16-bf4d-11e2-bbde-0024d71e178c">
+          <Component Id="CDepsTxt" Guid="*">
             <File Id='depstxt' Name='deps.txt' DiskId='1' Source='deps.txt' KeyPath='yes'/>
           </Component>
         </Directory>

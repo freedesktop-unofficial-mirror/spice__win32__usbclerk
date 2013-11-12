@@ -19,11 +19,11 @@ deps.txt:
 
 MANUFACTURER = The Spice Project
 
-usbclerk-$(WIXL_ARCH)-$(VERSION).msi: usbclerk.wxs deps.txt all
+usbclerk-$(WIXL_ARCH)-$(VERSION)$(BUILDID).msi: usbclerk.wxs deps.txt all
 	$(AM_V_GEN)MANUFACTURER="$(MANUFACTURER)" wixl --arch $(WIXL_ARCH) -o $@ $<
 
-msi: usbclerk-$(WIXL_ARCH)-$(VERSION).msi
+msi: usbclerk-$(WIXL_ARCH)-$(VERSION)$(BUILDID).msi
 
-CLEANFILES = usbclerk-$(WIXL_ARCH)-$(VERSION).msi
+CLEANFILES = usbclerk-$(WIXL_ARCH)-$(VERSION)$(BUILDID).msi
 
 .PHONY: msi
